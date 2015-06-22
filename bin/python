@@ -1,0 +1,37 @@
+#!/bin/sh
+
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+source /cvmfs/cms.cern.ch/crab3/crab.sh
+source /nfs/soft/grid/ui_sl6/setup/grid-env.sh
+
+# When debugging, PyCharm first execute some python command to open a socket on the remote host.
+# In this step, the working directory is not set. We need to cd into a CMSSW area manually
+
+# Get script directory
+DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)
+
+pushd "$DIR" &> /dev/null
+eval `/cvmfs/cms.cern.ch/common/scramv1 ru -sh`
+
+# Check if we need to build the package or not. Since it's only python, it's need to be built only once, as
+# the only thing scram to is to create a symlink from the python directory of the package to $CMSSW_BASE/python
+
+if [ ! -d "${CMSSW_BASE}/python/cp3_llbb/GridIn" ]; then
+    echo "First use. Building package, please wait..."
+    pushd "$CMSSW_BASE/src/cp3_llbb" &> /dev/null
+    scram b -j4 > /dev/null
+    popd &> /dev/null
+    echo "Done."
+fi
+
+popd &> /dev/null
+
+PYTHONPATH="${PYTHONPATH}:." #TODO: fix this some day
+
+# Remove the CMSSW/lib/ path from $PYTHONPATH. It's not needed for our framework and speed-up (a lot!) the PyCharm parsing process
+PYTHONPATH=${PYTHONPATH//${CMSSW_BASE}\/lib\/${SCRAM_ARCH}:/}
+PYTHONPATH=${PYTHONPATH//${CMSSW_RELEASE_BASE}\/lib\/${SCRAM_ARCH}:/}
+
+export PYTHONPATH
+
+python "$@"
