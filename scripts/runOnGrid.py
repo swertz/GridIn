@@ -8,7 +8,9 @@ Launch crab or condor and run the framework on multiple datasets
 
 from CRABAPI.RawCommand import crabCommand
 
-import json, copy
+import json
+import copy
+import os
 import argparse
 
 def get_options():
@@ -34,6 +36,22 @@ def get_options():
     if options.datasets is None:
         parser.error('You must specify a file listings the datasets to run over.')
 
+    c = options.configuration
+    if not os.path.isfile(c):
+        # Try to find the configuration file
+        filename = os.path.basename(c)
+        path = os.path.join(os.environ['CMSSW_BASE'], 'src/cp3_llbb')
+        c = None
+        for root, dirs, files in os.walk(path):
+            if filename in files:
+                c = os.path.join(root, filename)
+                break
+
+        if c is None:
+            raise IOError('Configuration file %r not found inside the cp3_llbb package' % filename)
+
+    options.configuration = c
+
     return options
 
 options = get_options()
@@ -50,7 +68,8 @@ config = create_config(options.mc)
 def submit(dataset, opt):
     c = copy.deepcopy(config)
 
-    c.JobType.scriptArgs = ['configuration=%s' % options.configuration]
+    c.JobType.scriptArgs = ['configuration=%s' % os.path.basename(options.configuration)]
+    c.JobType.inputFiles += [options.configuration]
 
     c.General.requestName = opt['name']
     c.Data.publishDataName = opt['name']
