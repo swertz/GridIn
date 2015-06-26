@@ -41,7 +41,7 @@ You can now run on the grid. Go to the ``test`` folder, and run
 runOnGrid.py -f datasets/mc_TT.json -c <Your_Configuration_File> --mc
 ```
 
-``<Your_Configuration_File>`` must be substituted by the name of the configuration file.
+``<Your_Configuration_File>`` must be substituted by the name of the configuration file, *including the ``.py`` extension*.
 You should now have a new file inside the working directory, named ``crab_TTJets_TuneCUETP8M1_amcatnloFXFX_25ns.py``.
 This file is a configuration file for ``crab3``. A file is created automatically for each dataset specified when running
  ``runOnGrid.py``.
