@@ -15,10 +15,12 @@ source /cvmfs/cms.cern.ch/crab3/crab.sh
 cd <path_to_CMSSW>
 cmsenv
 
-cd src/cp3_llbb
-git clone https://github.com/cp3-llbb/GridIn.git
+cd ${CMSSW_BASE}/src
+git clone -o upstream git@github.com:cp3-llbb/GridIn.git cp3_llbb/GridIn
 
 scram b -j 4
+cd ${CMSSW_BASE}/src/cp3_llbb/GridIn
+source setup.sh
 ```
 
 # How-to
