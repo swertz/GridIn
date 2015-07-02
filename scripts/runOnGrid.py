@@ -26,7 +26,7 @@ def get_options():
     group.add_argument('--data', action='store_true', dest='data', help='Run over data datasets')
 
     parser.add_argument('-c', '--configuration', type=str, required=True, dest='configuration', metavar='FILE',
-                        help='Analysis configuration file.')
+                        help='Analysis configuration file (including .py extension).')
 
     parser.add_argument('--submit', action='store_true', dest='submit',
                         help='Submit all the tasks to the CRAB server')
@@ -68,7 +68,7 @@ config = create_config(options.mc)
 def submit(dataset, opt):
     c = copy.deepcopy(config)
 
-    c.JobType.scriptArgs = ['configuration=%s' % os.path.basename(options.configuration)]
+#    c.JobType.scriptArgs = ['configuration=%s' % os.path.basename(options.configuration)]
     c.JobType.inputFiles += [options.configuration]
 
     c.General.requestName = opt['name']
