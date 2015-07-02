@@ -18,10 +18,10 @@ def create_config(is_mc):
 #    config.JobType.psetName = '../python/dummy_pset.py'
 #    config.JobType.scriptExe = '../bin/runFrameworkOnGrid.sh'
     config.JobType.sendPythonFolder = True
-    config.JobType.disableAutomaticOutputCollection = True
+#    config.JobType.disableAutomaticOutputCollection = True
     config.JobType.allowUndistributedCMSSW = True
     config.JobType.inputFiles = ['../python/runFrameworkOnGrid.py'] #FIXME: to be removed?
-    config.JobType.outputFiles = ['output_mc.root']
+#    config.JobType.outputFiles = ['output_mc.root']
 
     config.Data.inputDBS = 'global'
 
