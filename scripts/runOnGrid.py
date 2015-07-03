@@ -68,9 +68,6 @@ config = create_config(options.mc)
 def submit(dataset, opt):
     c = copy.deepcopy(config)
 
-#    c.JobType.scriptArgs = ['configuration=%s' % os.path.basename(options.configuration)]
-    c.JobType.inputFiles += [options.configuration]
-
     c.General.requestName = opt['name']
     c.Data.publishDataName = opt['name']
 
