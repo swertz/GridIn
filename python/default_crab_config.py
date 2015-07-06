@@ -14,8 +14,8 @@ def create_config(is_mc):
     config.General.transferLogs = True
 
     config.JobType.pluginName = 'Analysis'
-    config.JobType.psetName = '../../Framework/test/TestConfiguration.py'
-    config.JobType.sendPythonFolder = True
+    config.JobType.disableAutomaticOutputCollection = True
+    config.JobType.outputFiles = []
     config.JobType.allowUndistributedCMSSW = True
 
     config.Data.inputDBS = 'global'

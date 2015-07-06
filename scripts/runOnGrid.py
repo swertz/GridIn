@@ -12,6 +12,7 @@ import json
 import copy
 import os
 import argparse
+import sys
 
 def get_options():
     """
@@ -25,7 +26,7 @@ def get_options():
     group.add_argument('--mc', action='store_true', dest='mc', help='Run over MC datasets',)
     group.add_argument('--data', action='store_true', dest='data', help='Run over data datasets')
 
-    parser.add_argument('-c', '--configuration', type=str, required=True, dest='configuration', metavar='FILE',
+    parser.add_argument('-c', '--configuration', type=str, required=True, dest='psetName', metavar='FILE',
                         help='Analysis configuration file (including .py extension).')
 
     parser.add_argument('--submit', action='store_true', dest='submit',
@@ -36,9 +37,9 @@ def get_options():
     if options.datasets is None:
         parser.error('You must specify a file listings the datasets to run over.')
 
-    c = options.configuration
+    c = options.psetName
     if not os.path.isfile(c):
-        # Try to find the configuration file
+        # Try to find the psetName file
         filename = os.path.basename(c)
         path = os.path.join(os.environ['CMSSW_BASE'], 'src/cp3_llbb')
         c = None
@@ -50,7 +51,7 @@ def get_options():
         if c is None:
             raise IOError('Configuration file %r not found inside the cp3_llbb package' % filename)
 
-    options.configuration = c
+    options.psetName = c
 
     return options
 
@@ -67,6 +68,19 @@ config = create_config(options.mc)
 
 def submit(dataset, opt):
     c = copy.deepcopy(config)
+
+    c.JobType.psetName = options.psetName
+    # get the name of the output file out of there
+    filename = options.psetName
+    directory, module_name = os.path.split(filename)
+    module_name = os.path.splitext(module_name)[0]
+    path = list(sys.path)
+    sys.path.insert(0, directory)
+    try:
+      module = __import__(module_name)
+    finally:
+      sys.path[:] = path # restore
+    c.JobType.outputFiles.append( module.process.framework.output.value() )
 
     c.General.requestName = opt['name']
     c.Data.publishDataName = opt['name']
