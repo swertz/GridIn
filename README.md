@@ -4,6 +4,7 @@ GridIn: tools for running over grid
 *Please note:*
  - This guide suppose that the framework is already installed. See https://github.com/cp3-llbb/ExTreeMaker for detailed
  instructions
+ - This guide also installs SAMADhi
 
 # First time setup
 
@@ -17,6 +18,7 @@ cmsenv
 
 cd ${CMSSW_BASE}/src
 git clone -o upstream git@github.com:cp3-llbb/GridIn.git cp3_llbb/GridIn
+git clone -o upstream git@github.com:delaere/SAMADhi.git cp3_llbb/SAMADhi
 
 scram b -j 4
 cd ${CMSSW_BASE}/src/cp3_llbb/GridIn
