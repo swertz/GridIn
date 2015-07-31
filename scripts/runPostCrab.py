@@ -44,11 +44,11 @@ def get_dataset(inputDataset):
 
 def getGitTagBranchUrl(gitCallPath):
     # get the hash of the commit
-    # Well, not actually it should be the tag if a tag exist, the hash is the fallback solution
+    # Well, note that actually it should be the tag if a tag exist, the hash is the fallback solution
     proc = subprocess.Popen(['git', 'describe', '--tags', '--always'], cwd = gitCallPath, stdout=subprocess.PIPE)
-    hash = proc.stdout.read().strip('\n')
-    # get the list of branch in which you can find the hash
-    proc = subprocess.Popen(['git', 'branch', '-r', '--contains', hash], cwd = gitCallPath, stdout=subprocess.PIPE)
+    gitHash = proc.stdout.read().strip('\n')
+    # get the list of branches in which you can find the hash
+    proc = subprocess.Popen(['git', 'branch', '-r', '--contains', gitHash], cwd = gitCallPath, stdout=subprocess.PIPE)
     branch = proc.stdout.read()
     # get the stuff needed to write a valid url: name on github, name of repo, for both origin and upstream
     proc = subprocess.Popen(['git', 'remote', 'show', 'origin'], cwd = gitCallPath, stdout=subprocess.PIPE)
@@ -62,9 +62,9 @@ def getGitTagBranchUrl(gitCallPath):
     remoteUpstream, repoUpstream = remoteUpstream[0]
     repoUpstream = repoUpstream.strip('.git')
     if( 'upstream' in branch ):
-        url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + hash
+        url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + gitHash
     elif( 'origin' in branch ):
-        url = "\thttps://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + hash
+        url = "https://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + gitHash
         # FIXME: advertize you should consider a pull request?
 #        branches = [x.strip().split('/')[-1] for x in branch.strip().split('\n') if 'HEAD' not in x and 'master' not in x and 'origin' in x]
 #        print "WARNING: please consider merging your changes to upstream by opening a pull request, for example:"
@@ -72,7 +72,7 @@ def getGitTagBranchUrl(gitCallPath):
     else:
         print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
-    return hash, branch, url
+    return gitHash, branch, url
 
 def main():
     options = get_options()
