@@ -57,7 +57,11 @@ All the submitted tasks are stored inside the ``tasks`` folder.
 
 # Book-keeping
 
-TODO
+If the job has completed successfully, you can run 
+```bash
+runPostCrab.py <myCrabConfigFile.py>
+```
+This will gather the needed information (number of events, code version, source dataset, ...) and insert the sample (and possibly the parent dataset if missing) in the database
 
 # JSON file format
 
