@@ -10,9 +10,9 @@ import contextlib
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
 sys.path.append(os.path.join(CMSSW_BASE,'bin', SCRAM_ARCH))
-import SAMADhi
+from SAMADhi import Dataset, Sample, DbStore
 import das_import
-import add_sample
+from userPrompt import confirm
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
 
@@ -38,9 +38,9 @@ def load_file(filename):
     return module
 
 def get_dataset(inputDataset):
-    dbstore = SAMADhi.DbStore()
-    resultset = dbstore.find(SAMADhi.Dataset, SAMADhi.Dataset.name==inputDataset)
-    return list(resultset.values(SAMADhi.Dataset.name, SAMADhi.Dataset.dataset_id, SAMADhi.Dataset.nevents))
+    dbstore = DbStore()
+    resultset = dbstore.find(Dataset, Dataset.name==inputDataset)
+    return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents))
 
 def getGitTagBranchUrl(gitCallPath):
     # get the hash of the commit
@@ -73,6 +73,49 @@ def getGitTagBranchUrl(gitCallPath):
         print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, branch, url
+
+def add_sample(NAME, localpath, type, dataset_nevents, nselected, AnaUrl, FWUrl, dataset_id):
+    # Large part of this imported from SAMADhi add_sample.py
+    sample = Sample(unicode(NAME), unicode(localpath), unicode(type), dataset_nevents) 
+    sample.nevents = nselected
+#    sample.normalization
+#    sample.luminosity # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
+    sample.code_version = unicode(AnaUrl) #NB: limited to 255 characters, but so far so good
+    sample.user_comment = unicode(FWUrl)
+    sample.source_dataset_id = dataset_id
+#    sample.source_sample_id = None
+#    sample.author = 
+#    sample.creation_time = 
+    # connect to the MySQL database using default credentials
+    dbstore = DbStore()
+    # check that source dataset exist
+    if dbstore.find(Dataset,Dataset.dataset_id==sample.source_dataset_id).is_empty():
+        raise IndexError("No dataset with such index: %d"%sample.source_dataset_id)
+    # check that there is no existing entry
+    checkExisting = dbstore.find(Sample,Sample.name==sample.name)
+    if checkExisting.is_empty():
+      print sample
+      if confirm(prompt="Insert into the database?", resp=True):
+        dbstore.add(sample)
+        # compute the luminosity, if possible
+        if sample.luminosity is None:
+          dbstore.flush()
+          sample.luminosity = sample.getLuminosity()
+    else:
+      existing = checkExisting.one()
+      prompt  = "Replace existing "
+      prompt += str(existing)
+      prompt += "\nby new "
+      prompt += str(sample)
+      prompt += "\n?"
+      if confirm(prompt, resp=False):
+        existing.replaceBy(sample)
+        if existing.luminosity is None:
+          dbstore.flush()
+          existing.luminosity = existing.getLuminosity()
+    # commit
+    dbstore.commit()
+
 
 def main():
     options = get_options()
@@ -170,23 +213,7 @@ def main():
     # nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaHash
-    tmp_sysargv = sys.argv
-    sys.argv = ["add_sample.py", "NTUPLES", localpath,
-                "--name", NAME, 
-                "--processed", str(dataset_nevents),
-                "--nevents", str(nselected), 
-# --norm
-# --lumi (FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs)
-                "--code_version", AnaUrl, #NB: limited to 255 characters, but so far so good
-                "--comment", FWUrl, 
-                "--source_dataset", str(dataset_id),
-                "--source_sample", None
-# --author
-# --time
-                ]
-    print sys.argv
-    add_sample.main()
-    sys.argv = tmp_sysargv
+    add_sample(NAME, localpath, "NTUPLES", dataset_nevents, nselected, AnaUrl, FWUrl, dataset_id)
 
 if __name__ == '__main__':
     main() 
