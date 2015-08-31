@@ -1,20 +1,32 @@
 {
-  "/MuonEG/Run2015B-PromptReco-v1/MINIAOD": {
-    "name": "MuonEG_Run2015B-PromptReco-v1_2015-07-15",
+  "/SingleElectron/Run2015B-PromptReco-v1/MINIAOD": {
+    "name": "SingleElectron_Run2015B-PromptReco-v1_2015-08-27",
     "units_per_job": 200,
-    "run_range": [246908,251252],
-    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-251252_13TeV_PromptReco_Collisions15_JSON.txt"
+    "run_range": [246908,254879],
+    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-254879_13TeV_PromptReco_Collisions15_JSON.txt"
+  },
+  "/SingleMuon/Run2015B-PromptReco-v1/MINIAOD": {
+    "name": "SingleMuon_Run2015B-PromptReco-v1_2015-08-27",
+    "units_per_job": 200,
+    "run_range": [246908,254879],
+    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-254879_13TeV_PromptReco_Collisions15_JSON.txt"
+  },
+  "/MuonEG/Run2015B-PromptReco-v1/MINIAOD": {
+    "name": "MuonEG_Run2015B-PromptReco-v1_2015-08-27",
+    "units_per_job": 200,
+    "run_range": [246908,254879],
+    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-254879_13TeV_PromptReco_Collisions15_JSON.txt"
   },
   "/DoubleMuon/Run2015B-PromptReco-v1/MINIAOD": {
-    "name": "DoubleMuon_Run2015B-PromptReco-v1_2015-07-15",
+    "name": "DoubleMuon_Run2015B-PromptReco-v1_2015-08-27",
     "units_per_job": 200,
-    "run_range": [246908,251252],
-    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-251252_13TeV_PromptReco_Collisions15_JSON.txt"
+    "run_range": [246908,254879],
+    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-254879_13TeV_PromptReco_Collisions15_JSON.txt"
   },
   "/DoubleEG/Run2015B-PromptReco-v1/MINIAOD": {
-    "name": "DoubleEG_Run2015B-PromptReco-v1_2015-07-15",
+    "name": "DoubleEG_Run2015B-PromptReco-v1_2015-08-27",
     "units_per_job": 200,
-    "run_range": [246908,251252],
-    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-251252_13TeV_PromptReco_Collisions15_JSON.txt"
+    "run_range": [246908,254879],
+    "certified_lumi_file":"https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-254879_13TeV_PromptReco_Collisions15_JSON.txt"
   }
 }
