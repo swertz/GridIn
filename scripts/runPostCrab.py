@@ -6,6 +6,7 @@ import sys
 import subprocess
 import tarfile
 import contextlib
+from pwd import getpwuid
 # import SAMADhi stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
@@ -43,13 +44,6 @@ def get_dataset(inputDataset):
     return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents))
 
 def getGitTagBranchUrl(gitCallPath):
-    # get the hash of the commit
-    # Well, note that actually it should be the tag if a tag exist, the hash is the fallback solution
-    proc = subprocess.Popen(['git', 'describe', '--tags', '--always'], cwd = gitCallPath, stdout=subprocess.PIPE)
-    gitHash = proc.stdout.read().strip('\n')
-    # get the list of branches in which you can find the hash
-    proc = subprocess.Popen(['git', 'branch', '-r', '--contains', gitHash], cwd = gitCallPath, stdout=subprocess.PIPE)
-    branch = proc.stdout.read()
     # get the stuff needed to write a valid url: name on github, name of repo, for both origin and upstream
     proc = subprocess.Popen(['git', 'remote', 'show', 'origin'], cwd = gitCallPath, stdout=subprocess.PIPE)
     remoteOrigin = proc.stdout.read()
@@ -61,6 +55,15 @@ def getGitTagBranchUrl(gitCallPath):
     remoteUpstream = [x.split(':')[-1].split('/') for x in remoteUpstream.split('\n') if 'Fetch URL' in x]
     remoteUpstream, repoUpstream = remoteUpstream[0]
     repoUpstream = repoUpstream.strip('.git')
+    # get the hash of the commit
+    # Well, note that actually it should be the tag if a tag exist, the hash is the fallback solution
+    proc = subprocess.Popen(['git', 'describe', '--tags', '--always', '--dirty'], cwd = gitCallPath, stdout=subprocess.PIPE)
+    gitHash = proc.stdout.read().strip('\n')
+    if( 'dirty' in gitHash ):
+        raise AssertionError("Aborting: your working tree for repository", repoOrigin, "is dirty, please clean the changes not staged/committed before inserting this in the database") 
+    # get the list of branches in which you can find the hash
+    proc = subprocess.Popen(['git', 'branch', '-r', '--contains', gitHash], cwd = gitCallPath, stdout=subprocess.PIPE)
+    branch = proc.stdout.read()
     if( 'upstream' in branch ):
         url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + gitHash
     elif( 'origin' in branch ):
@@ -78,13 +81,13 @@ def add_sample(NAME, localpath, type, dataset_nevents, nselected, AnaUrl, FWUrl,
     # Large part of this imported from SAMADhi add_sample.py
     sample = Sample(unicode(NAME), unicode(localpath), unicode(type), dataset_nevents) 
     sample.nevents = nselected
-#    sample.normalization
-#    sample.luminosity # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
-    sample.code_version = unicode(AnaUrl) #NB: limited to 255 characters, but so far so good
-    sample.user_comment = unicode(FWUrl)
+    sample.normalization = 1.0
+    sample.luminosity  = 40028954.499 / 1e6 # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
+    sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
+#    sample.user_comment =
     sample.source_dataset_id = dataset_id
 #    sample.source_sample_id = None
-#    sample.author = 
+    sample.author = unicode(getpwuid(os.stat(os.getcwd()).st_uid).pw_name)
 #    sample.creation_time = 
     # connect to the MySQL database using default credentials
     dbstore = DbStore()
@@ -128,14 +131,18 @@ def main():
     psetName = module.config.JobType.psetName
     inputDataset = unicode(module.config.Data.inputDataset)
     
-    print "##### Check the dataset exists in the database"
+    print "##### Check if the dataset exists in the database"
     # if yes then grab its ID
     # if not then run das_import.py to add it
+    print inputDataset
     values = get_dataset(inputDataset)
+    print values
     if( len(values) == 0 ):
         tmp_sysargv = sys.argv
         sys.argv = ["das_import.py", inputDataset]
+        print "calling das_import"
         das_import.main()
+        print "done"
         sys.argv = tmp_sysargv
         values = get_dataset(inputDataset)
     # if there is more than one sample then we're in trouble, crash here
@@ -152,10 +159,10 @@ def main():
     report = crabCommand('report', dir = taskdir )
 #    print report
 
-    print "##### Check the job processed the whole sample"
+    print "##### Check if the job processed the whole sample"
     # FIXME: should it rather be just a warning ? Will likely be problematic at some point for big samples
     # FIXME: if changing to a warning, be careful what you actually insert in the DB
-    assert( dataset_nevents == report['eventsRead'] )
+#    assert( dataset_nevents == report['eventsRead'] )
 
     print "##### Figure out the code(s) version"
     # first the version of the framework
