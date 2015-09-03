@@ -4,7 +4,7 @@ GridIn: tools for running over grid
 *Please note:*
  - This guide suppose that the framework is already installed. See https://github.com/cp3-llbb/ExTreeMaker for detailed
  instructions
- - This guide also installs SAMADhi
+ - This guide also installs [SAMADhi](https://github.com/delaere/SAMADhi)
 
 # First time setup
 
