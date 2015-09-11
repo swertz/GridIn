@@ -49,11 +49,10 @@ runOnGrid.py -f datasets/mc_TT.json -c <Your_Configuration_File> --mc
 You should now have a new file inside the working directory, named ``crab_TTJets_TuneCUETP8M1_amcatnloFXFX_25ns.py``.
 This file is a configuration file for ``crab3``. A file is created automatically for each dataset specified when running
  ``runOnGrid.py``.
+ 
+Note: **By default, ``runOnGrid.py`` does not submit any jobs to the grid, it only creates the necessary files for crab.** If you want to automatically submit the jobs, you can add the ``--submit`` flag when running ``runOnGrid.py`` (**does not seems to work for the moment due to a crab bug**).
 
-You can also add the flag ``--submit`` when running ``runOnGrid.py``. If presents, the tasks will be automatically
-submitted.
-
-All the submitted tasks are stored inside the ``tasks`` folder.
+To manually launch the jobs, use the ``crab submit <crab_python_file>``. All the submitted tasks are stored inside the ``tasks`` folder.
 
 # Book-keeping
 
