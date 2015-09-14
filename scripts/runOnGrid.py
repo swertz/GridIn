@@ -57,6 +57,21 @@ def get_options():
 
 options = get_options()
 
+# get the name of the output file
+filename = options.psetName
+directory, module_name = os.path.split(filename)
+module_name = os.path.splitext(module_name)[0]
+path = list(sys.path)
+sys.path.insert(0, directory)
+try:
+  module = __import__(module_name)
+finally:
+  sys.path[:] = path # restore
+
+print("")
+
+options.outputFile = module.process.framework.output.value()
+
 datasets = {}
 for dataset_file in options.datasets:
     with open(dataset_file) as f:
@@ -70,23 +85,24 @@ def submit(dataset, opt):
     c = copy.deepcopy(config)
 
     c.JobType.psetName = options.psetName
-    # get the name of the output file out of there
-    filename = options.psetName
-    directory, module_name = os.path.split(filename)
-    module_name = os.path.splitext(module_name)[0]
-    path = list(sys.path)
-    sys.path.insert(0, directory)
-    try:
-      module = __import__(module_name)
-    finally:
-      sys.path[:] = path # restore
-    c.JobType.outputFiles.append( module.process.framework.output.value() )
+    c.JobType.outputFiles.append(options.outputFile)
 
     c.General.requestName = opt['name']
     c.Data.publishDataName = opt['name']
 
     c.Data.inputDataset = dataset
     c.Data.unitsPerJob = opt['units_per_job']
+
+    pyCfgParams = []
+
+    era = opt['era']
+    assert era == '25ns' or era == '50ns'
+    pyCfgParams += ['era=%s' % era]
+
+    if 'globalTag' in opt:
+        pyCfgParams += ['globalTag=%s' % opt['globalTag']]
+
+    c.JobType.pyCfgParams = pyCfgParams
 
     print("Submitting new task %r" % opt['name'])
     print("\tDataset: %s" % dataset)
