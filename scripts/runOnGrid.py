@@ -97,14 +97,14 @@ def submit(dataset, opt):
 
     era = opt['era']
     assert era == '25ns' or era == '50ns'
-    pyCfgParams += ['era=%s' % era]
+    pyCfgParams += [str('era=%s' % era)]
 
     if 'globalTag' in opt:
-        pyCfgParams += ['globalTag=%s' % opt['globalTag']]
+        pyCfgParams += [str('globalTag=%s' % opt['globalTag'])]
 
     # Fix process name for PromptReco, which is RECO instead of PAT
     if options.data and 'PromptReco' in dataset:
-        pyCfgParams += ['process=RECO']
+        pyCfgParams += [str('process=RECO')]
 
     c.JobType.pyCfgParams = pyCfgParams
 
