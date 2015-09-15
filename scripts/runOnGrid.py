@@ -32,6 +32,9 @@ def get_options():
     parser.add_argument('--submit', action='store_true', dest='submit',
                         help='Submit all the tasks to the CRAB server')
 
+    parser.add_argument('-j', '--cores', type=int, action='store', dest='processes', metavar='N', default='4',
+                        help='Number of core to use during the crab tasks creation')
+
     options = parser.parse_args()
 
     if options.datasets is None:
@@ -129,6 +132,6 @@ def submit_wrapper(args):
     submit(*args)
 
 from multiprocessing import Pool
-pool = Pool(processes=4)
+pool = Pool(processes=options.processes)
 pool.map(submit_wrapper, datasets.items())
 
