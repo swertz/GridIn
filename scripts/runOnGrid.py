@@ -13,6 +13,7 @@ import copy
 import os
 import argparse
 import sys
+import subprocess
 
 def get_options():
     """
@@ -120,11 +121,12 @@ def submit(dataset, opt):
             'https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-247381_13TeV_PromptReco_Collisions15_ZeroTesla_JSON.txt'
 
     # Create output file in case something goes wrong with submit
-    with open('crab_' + opt['name'] + '.py', 'w') as f:
+    crab_config_file = 'crab_' + opt['name'] + '.py'
+    with open(crab_config_file, 'w') as f:
         f.write(str(c))
 
     if options.submit:
-        crabCommand('submit', config=c)
+        subprocess.call(['crab', 'submit', crab_config_file])
     else:
         print('Configuration file saved as %r' % ('crab_' + opt['name'] + '.py'))
 
