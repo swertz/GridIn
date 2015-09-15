@@ -13,6 +13,7 @@ import copy
 import os
 import argparse
 import sys
+import subprocess
 
 def get_options():
     """
@@ -31,6 +32,9 @@ def get_options():
 
     parser.add_argument('--submit', action='store_true', dest='submit',
                         help='Submit all the tasks to the CRAB server')
+
+    parser.add_argument('-j', '--cores', type=int, action='store', dest='processes', metavar='N', default='4',
+                        help='Number of core to use during the crab tasks creation')
 
     options = parser.parse_args()
 
@@ -117,11 +121,12 @@ def submit(dataset, opt):
             'https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-247381_13TeV_PromptReco_Collisions15_ZeroTesla_JSON.txt'
 
     # Create output file in case something goes wrong with submit
-    with open('crab_' + opt['name'] + '.py', 'w') as f:
+    crab_config_file = 'crab_' + opt['name'] + '.py'
+    with open(crab_config_file, 'w') as f:
         f.write(str(c))
 
     if options.submit:
-        crabCommand('submit', config=c)
+        subprocess.call(['crab', 'submit', crab_config_file])
     else:
         print('Configuration file saved as %r' % ('crab_' + opt['name'] + '.py'))
 
@@ -129,6 +134,6 @@ def submit_wrapper(args):
     submit(*args)
 
 from multiprocessing import Pool
-pool = Pool(processes=4)
+pool = Pool(processes=options.processes)
 pool.map(submit_wrapper, datasets.items())
 
