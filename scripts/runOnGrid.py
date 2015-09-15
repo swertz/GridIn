@@ -102,6 +102,10 @@ def submit(dataset, opt):
     if 'globalTag' in opt:
         pyCfgParams += ['globalTag=%s' % opt['globalTag']]
 
+    # Fix process name for PromptReco, which is RECO instead of PAT
+    if options.data and 'PromptReco' in dataset:
+        pyCfgParams += ['process=RECO']
+
     c.JobType.pyCfgParams = pyCfgParams
 
     print("Submitting new task %r" % opt['name'])
