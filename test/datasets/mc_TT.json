@@ -1,17 +1,22 @@
 {
+  "/TT_TuneCUETP8M1_13TeV-powheg-pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9-v2/MINIAODSIM": {
+    "name": "TT_TuneCUETP8M1_13TeV-powheg-pythia8_25ns",
+    "units_per_job": 15,
+    "era": "25ns"
+  },
   "/TTTo2L2Nu_13TeV-powheg/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9-v1/MINIAODSIM": {
     "name": "TTTo2L2Nu_13TeV-powheg_25ns",
-    "units_per_job": 15,
+    "units_per_job": 5,
     "era": "25ns"
   },
-  "/TTZToLLNuNu_M-10_TuneCUETP8M1_13TeV-amcatnlo-pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9-v1/MINIAODSIM": {
-    "name": "TTZToLLNuNu_M-10_TuneCUETP8M1_13TeV-amcatnlo-pythia8_25ns",
-    "units_per_job": 15,
+  "/TT_Mtt-1000toInf_TuneCUETP8M1_13TeV-powheg-pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9_ext1-v2/MINIAODSIM": {
+    "name": "TT_Mtt-1000toInf_TuneCUETP8M1_13TeV-powheg-pythia8_25ns",
+    "units_per_job": 5,
     "era": "25ns"
   },
-  "/TTWJetsToLNu_TuneCUETP8M1_13TeV-amcatnloFXFX-madspin-pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9-v1/MINIAODSIM": {
-    "name": "TTWJetsToLNu_TuneCUETP8M1_13TeV-amcatnloFXFX-madspin-pythia8_25ns",
-    "units_per_job": 15,
+  "/TT_Mtt-700to1000_TuneCUETP8M1_13TeV-powheg-pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9_ext1-v1/MINIAODSIM": {
+    "name": "TT_Mtt-700to1000_TuneCUETP8M1_13TeV-powheg-pythia8_25ns",
+    "units_per_job": 5,
     "era": "25ns"
-  }
+  },
 }
