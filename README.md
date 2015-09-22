@@ -2,9 +2,10 @@ GridIn: tools for running over grid
 ===================================
 
 *Please note:*
- - This guide suppose that the framework is already installed. See https://github.com/cp3-llbb/ExTreeMaker for detailed
- instructions
- - This guide also installs [SAMADhi](https://github.com/delaere/SAMADhi)
+ - This guide suppose that the framework is already installed. See https://github.com/cp3-llbb/Framework for detailed instructions
+ - This guide also installs our local database [SAMADhi](https://github.com/delaere/SAMADhi)
+ - You probably want to have the access to this database: ask around!
+ - The utilities in the ``scripts`` folders are copied to ``CMSSW/bin`` during the ``scram b``, so if these utilities have been modified you need to rebuild in order to have them in your PATH
 
 # First time setup
 
