@@ -16,6 +16,9 @@ import das_import
 from userPrompt import confirm
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
+# import a bit of ROOT
+import ROOT
+ROOT.gROOT.Reset()
 
 def get_options():
     """
@@ -24,6 +27,7 @@ def get_options():
     parser = argparse.ArgumentParser(description='Gather the information on a processed sample and insert the information in SAMADhi')
     parser.add_argument('CrabConfig', type=str, metavar='FILE',
                         help='CRAB3 configuration file (including .py extension).')
+    parser.add_argument('--debug', action='store_true', help='More verbose output', dest='debug')
     options = parser.parse_args()
     return options
 
@@ -68,23 +72,22 @@ def getGitTagBranchUrl(gitCallPath):
         url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + gitHash
     elif( 'origin' in branch ):
         url = "https://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + gitHash
-        # FIXME: advertize you should consider a pull request?
-#        branches = [x.strip().split('/')[-1] for x in branch.strip().split('\n') if 'HEAD' not in x and 'master' not in x and 'origin' in x]
-#        print "WARNING: please consider merging your changes to upstream by opening a pull request, for example:"
-#        print "\thttps://github.com/cp3-llbb/Framework/compare/master..." + githubUser + ":" + branches[0] + "?expand=1"
     else:
         print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, branch, url
 
-def add_sample(NAME, localpath, type, dataset_nevents, nselected, AnaUrl, FWUrl, dataset_id):
+def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents):
     # Large part of this imported from SAMADhi add_sample.py
-    sample = Sample(unicode(NAME), unicode(localpath), unicode(type), dataset_nevents) 
+    sample = Sample(unicode(NAME), unicode(localpath), unicode(type), nevents) 
     sample.nevents = nselected
-    sample.normalization = 1.0
-    sample.luminosity  = 40028954.499 / 1e6 # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
+    sample.normalization = sumw # Store sum(w) in the normalization, as long as we all know that's what is stored there, should be safe
+#    sample.luminosity  = 40028954.499 / 1e6 # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
     sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
-#    sample.user_comment =
+    if not has_job_processed_everything:
+        sample.user_comment = unicode("Sample was not fully processed, only " + str(nevents) + "/" + str(dataset_nevents) + " events were processed")
+    else:
+        sample.user_comment = u""
     sample.source_dataset_id = dataset_id
 #    sample.source_sample_id = None
     sample.author = unicode(getpwuid(os.stat(os.getcwd()).st_uid).pw_name)
@@ -130,13 +133,14 @@ def main():
     requestName = module.config.General.requestName
     psetName = module.config.JobType.psetName
     inputDataset = unicode(module.config.Data.inputDataset)
+    print "done"
     
     print "##### Check if the dataset exists in the database"
     # if yes then grab its ID
     # if not then run das_import.py to add it
-    print inputDataset
+    # print inputDataset
     values = get_dataset(inputDataset)
-    print values
+    # print values
     if( len(values) == 0 ):
         tmp_sysargv = sys.argv
         sys.argv = ["das_import.py", inputDataset]
@@ -148,8 +152,13 @@ def main():
     # if there is more than one sample then we're in trouble, crash here
     assert( len(values) == 1 )
     dataset_name, dataset_id, dataset_nevents = values[0]
+    print "True"
     
     print "##### Get info from crab (logs, outputs, report)"
+    # Since the API outputs AND prints the same data, hide whatever is printed on screen
+    saved_stdout, saved_stderr = sys.stdout, sys.stderr
+    if not options.debug:
+        sys.stdout = sys.stderr = open(os.devnull, "w")
     taskdir = os.path.join(workArea, 'crab_' + requestName)
     # list logs
     log_files = crabCommand('getlog', '--dump', dir = taskdir )
@@ -157,18 +166,49 @@ def main():
     output_files = crabCommand('getoutput', '--dump', dir = taskdir )
     # get crab report
     report = crabCommand('report', dir = taskdir )
-#    print report
+    # restore print to stdout 
+    if not options.debug:
+        sys.stdout, sys.stderr = saved_stdout, saved_stderr
+#    print "log_files=", log_files
+#    print "output_files=", output_files
+#    print "report=", report
+    print "done"
 
     print "##### Check if the job processed the whole sample"
-    # FIXME: should it rather be just a warning ? Will likely be problematic at some point for big samples
-    # FIXME: if changing to a warning, be careful what you actually insert in the DB
-#    assert( dataset_nevents == report['eventsRead'] )
+    has_job_processed_everything = (dataset_nevents == report['eventsRead'])
+    is_data = (module.config.Data.splitting == 'LumiBased')
+    if has_job_processed_everything:
+        print "done"
+    else:
+        if is_data:
+            # This is data, it is expected to not run on everything given we use a lumiMask
+            print "done"
+        else:
+            # be scary
+            print "!!!!! < BEWARE> !!!!!"
+            print "You are about to add in the DB a sample which has not been completely processed"
+            print "dataset_nevents=", dataset_nevents
+            print "report['eventsRead']= ", report['eventsRead']
+            print "This is fine, as long as you are sure this is what you want to do?"
+            print "PLEASE CHECK CRAB WILL NOT TRY RESUBMITTING THE JOBS!"
+            print "Currently this area is _VERY_ weakly protected in the whole workflow"
+            print "The script will delete from disk output files that crab is not aware of"
+            print "If you did not read this long warning, then the fault is on you...."
+            print "!!!!! </BEWARE> !!!!!"
+            print "I accept the consequences [Y/n] "
+            choice = raw_input().lower()
+            if not(choice == '' or choice == "yes" or choice == "y"):
+                print "has_job_processed_everything=", has_job_processed_everything
+                raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
+
 
     print "##### Figure out the code(s) version"
     # first the version of the framework
     FWHash, FWBranch, FWUrl = getGitTagBranchUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
+    print "FWUrl=", FWUrl
     # then the version of the analyzer
     AnaHash, AnaBranch, AnaUrl = getGitTagBranchUrl( os.path.dirname( psetName ) )
+    print "AnaUrl=", AnaUrl
 
     print "##### Figure out the number of selected events"
     # Need to get this from the output log of the jobs, and sum them all
@@ -187,7 +227,7 @@ def main():
                             continue
                         l = line.split()
                         nselected  += int(line.split()[3])
-#    print nselected
+    print "nselected=", nselected
 
     print "##### For the path, check that the files there do correspond EXACTLY to the list of output files from crab"
     # (crab being crab, we're never too careful!)
@@ -198,11 +238,39 @@ def main():
     localfiles = [ os.path.join(p, f) for f in os.listdir(localpath) if os.path.isfile( os.path.join(localpath, f) ) and 'root' in f ]
     # unordered comparison: the two list should be equal
     if set(localfiles) != set(output_files['lfn']):
-        print "ERROR: the content of the path and the list of crab outputs are different, abort now!"
-        print "localfiles (what's here locally)= ", localfiles
-        print "outputfiles (what crab is saying)= ", output_files['lfn']
-        raise AssertionError("CRAB3 and local list of files do not match")
+        if len(localfiles) < len(output_files['lfn']):
+            print "ERROR: the content of the path and the list of crab outputs are different, abort now!"
+            print "localfiles (what's here locally)= ", localfiles
+            print "outputfiles (what crab is saying)= ", output_files['lfn']
+            raise AssertionError("CRAB3 and local list of files do not match")
+        else:
+            if not has_job_processed_everything:
+                print "More local files than crab expected, trusting crab (as you chose to)"
+                files_to_delete = list(set(localfiles) - set(output_files['lfn']))
+                print "The following files will be deleted from disk:"
+                print files_to_delete
+                print "Yes, I am sure of what I am doing, go on and delete these files [Y/n] "
+                choice = raw_input().lower()
+                if not(choice == '' or choice == "yes" or choice == "y"):
+                    raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
+                else:
+                    for file in files_to_delete:
+                        print "Deleting file", ingridStoragePrefix + file
+                        os.remove(ingridStoragePrefix + file)
+            else:
+                print "Something wrong is going on, aborting"
+                raise AssertionError("CRAB3 and local list of files do not match")
 #    print localpath 
+    print "True"
+
+    print "##### Get the sum of weights from the output files"
+    rootfiles = [ os.path.join(localpath, f) for f in os.listdir(localpath) if os.path.isfile( os.path.join(localpath,f) ) and "root" in f ]
+    sumw = 0.
+    for rootfile in rootfiles:
+        f = ROOT.TFile(rootfile)
+        sumw += f.Get("event_weight_sum").GetVal()
+        f.Close()
+    print "sumw=", sumw
 
     print "##### Put it all together: write this sample into the database"
     # all the info we have gathered is:
@@ -211,7 +279,7 @@ def main():
     # psetName
     # inputDataset
     # dataset_id
-    # dataset_nevents (asserted to be equal to report['eventsRead'])
+    # report['eventsRead']) (not necessarily equal to dataset_nevents)
     # log_files
     # output_files
     # report
@@ -220,7 +288,7 @@ def main():
     # nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaHash
-    add_sample(NAME, localpath, "NTUPLES", dataset_nevents, nselected, AnaUrl, FWUrl, dataset_id)
+    add_sample(NAME, localpath, "NTUPLES", report['eventsRead'], nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents)
 
 if __name__ == '__main__':
     main() 
