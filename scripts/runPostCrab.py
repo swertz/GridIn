@@ -176,24 +176,30 @@ def main():
 
     print "##### Check if the job processed the whole sample"
     has_job_processed_everything = (dataset_nevents == report['eventsRead'])
+    is_data = (module.config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
     else:
-        print "!!!!! < BEWARE> !!!!!"
-        print "You are about to add in the DB a sample which has not been completely processed"
-        print "dataset_nevents=", dataset_nevents
-        print "report['eventsRead']= ", report['eventsRead']
-        print "This is fine, as long as you are sure this is what you want to do?"
-        print "PLEASE CHECK CRAB WILL NOT TRY RESUBMITTING THE JOBS!"
-        print "Currently this area is _VERY_ weakly protected in the whole workflow"
-        print "The script will delete from disk output files that crab is not aware of"
-        print "If you did not read this long warning, then the fault is on you...."
-        print "!!!!! </BEWARE> !!!!!"
-        print "I accept the consequences [Y/n] "
-        choice = raw_input().lower()
-        if not(choice == '' or choice == "yes" or choice == "y"):
-            print "has_job_processed_everything=", has_job_processed_everything
-            raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
+        if is_data:
+            # This is data, it is expected to not run on everything given we use a lumiMask
+            print "done"
+        else:
+            # be scary
+            print "!!!!! < BEWARE> !!!!!"
+            print "You are about to add in the DB a sample which has not been completely processed"
+            print "dataset_nevents=", dataset_nevents
+            print "report['eventsRead']= ", report['eventsRead']
+            print "This is fine, as long as you are sure this is what you want to do?"
+            print "PLEASE CHECK CRAB WILL NOT TRY RESUBMITTING THE JOBS!"
+            print "Currently this area is _VERY_ weakly protected in the whole workflow"
+            print "The script will delete from disk output files that crab is not aware of"
+            print "If you did not read this long warning, then the fault is on you...."
+            print "!!!!! </BEWARE> !!!!!"
+            print "I accept the consequences [Y/n] "
+            choice = raw_input().lower()
+            if not(choice == '' or choice == "yes" or choice == "y"):
+                print "has_job_processed_everything=", has_job_processed_everything
+                raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
 
 
     print "##### Figure out the code(s) version"
