@@ -23,5 +23,5 @@
     "name": "ST_t-channel_top_4f_leptonDecays_13TeV-powheg-pythia8_25ns",
     "units_per_job": 5,
     "era": "25ns"
-  },
+  }
 }
