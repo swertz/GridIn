@@ -215,18 +215,20 @@ def main():
 #    log_files = {'lfn': ['/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/log/cmsRun_1.log.tar.gz'], 'pfn': ['srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/log/cmsRun_1.log.tar.gz']}
     nselected = 0
     for lfn in log_files['lfn']:
-        tarLog =  ingridStoragePrefix + lfn
-        with tarfile.open(tarLog) as tar:
-            for tarFile in tar.getmembers():
-                if 'stdout' not in tarFile.name:
-                    continue
-                # For some reason, even though we are using python 2.7, the with statement here seems broken... Using contextlib to handle the file opening / reading cleanly
-                with contextlib.closing(tar.extractfile(tarFile)) as file:
-                    for line in file:
-                        if 'processed' not in line and 'selected' not in line:
-                            continue
-                        l = line.split()
-                        nselected  += int(line.split()[3])
+        # Workaround because crab -getlob returns the log of *all* the jobs, event the failed ones => file parsing fails
+        if 'failed' not in lfn:
+            tarLog =  ingridStoragePrefix + lfn
+            with tarfile.open(tarLog) as tar:
+                for tarFile in tar.getmembers():
+                    if 'stdout' not in tarFile.name:
+                        continue
+                    # For some reason, even though we are using python 2.7, the with statement here seems broken... Using contextlib to handle the file opening / reading cleanly
+                    with contextlib.closing(tar.extractfile(tarFile)) as file:
+                        for line in file:
+                            if 'processed' not in line and 'selected' not in line:
+                                continue
+                            l = line.split()
+                            nselected  += int(line.split()[3])
     print "nselected=", nselected
 
     print "##### For the path, check that the files there do correspond EXACTLY to the list of output files from crab"
