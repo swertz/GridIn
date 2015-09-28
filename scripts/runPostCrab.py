@@ -1,4 +1,7 @@
-#!/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/bin/python
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import division
 
 import argparse
 import os
@@ -7,18 +10,45 @@ import subprocess
 import tarfile
 import contextlib
 from pwd import getpwuid
+
 # import SAMADhi stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
 sys.path.append(os.path.join(CMSSW_BASE,'bin', SCRAM_ARCH))
-from SAMADhi import Dataset, Sample, DbStore
+
+# Add default ingrid storm package
+sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/site-packages/storm-0.20-py2.7-linux-x86_64.egg')
+sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/site-packages/MySQL_python-1.2.3-py2.7-linux-x86_64.egg')
+
+from SAMADhi import Dataset, Sample, File, DbStore
 import das_import
 from userPrompt import confirm
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
+
 # import a bit of ROOT
 import ROOT
 ROOT.gROOT.Reset()
+
+def get_file_data(pfn):
+    """
+    Return the sum of event weights and the entries of the framework output
+    """
+    f = ROOT.TFile.Open(pfn)
+    if not f:
+        return (None, None)
+
+    sumw = f.Get("event_weight_sum")
+    if sumw:
+        sumw = sumw.GetVal()
+    else:
+        sumw = None
+
+    tree = f.Get("t")
+    if tree:
+        return (sumw, tree.GetEntriesFast())
+    else:
+        return (sumw, None)
 
 def get_options():
     """
@@ -77,11 +107,29 @@ def getGitTagBranchUrl(gitCallPath):
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, branch, url
 
-def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents):
-    # Large part of this imported from SAMADhi add_sample.py
-    sample = Sample(unicode(NAME), unicode(localpath), unicode(type), nevents) 
+def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents, files):
+    dbstore = DbStore()
+
+    sample = None
+
+    # check that source dataset exist
+    if dbstore.find(Dataset, Dataset.dataset_id == dataset_id).is_empty():
+        raise IndexError("No dataset with such index: %d" % sample.dataset_id)
+
+    # check that there is no existing entry
+    update = False
+    checkExisting = dbstore.find(Sample, Sample.name == unicode(NAME))
+    if checkExisting.is_empty():
+        sample = Sample(unicode(NAME), unicode(localpath), unicode(type), nevents)
+    else:
+        update = True
+        sample = checkExisting.one()
+        sample.removeFiles(dbstore)
+
+    sample.nevents_processed = nevents
     sample.nevents = nselected
-    sample.normalization = sumw # Store sum(w) in the normalization, as long as we all know that's what is stored there, should be safe
+    sample.normalization = 1
+    sample.event_weight_sum = sumw
 #    sample.luminosity  = 40028954.499 / 1e6 # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
     sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
     if not has_job_processed_everything:
@@ -89,43 +137,43 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
     else:
         sample.user_comment = u""
     sample.source_dataset_id = dataset_id
-#    sample.source_sample_id = None
     sample.author = unicode(getpwuid(os.stat(os.getcwd()).st_uid).pw_name)
-#    sample.creation_time = 
-    # connect to the MySQL database using default credentials
-    dbstore = DbStore()
-    # check that source dataset exist
-    if dbstore.find(Dataset,Dataset.dataset_id==sample.source_dataset_id).is_empty():
-        raise IndexError("No dataset with such index: %d"%sample.source_dataset_id)
-    # check that there is no existing entry
-    checkExisting = dbstore.find(Sample,Sample.name==sample.name)
-    if checkExisting.is_empty():
-      print sample
-      if confirm(prompt="Insert into the database?", resp=True):
+
+    for f in files:
+        sample.files.add(f)
+
+    if not update:
         dbstore.add(sample)
-        # compute the luminosity, if possible
         if sample.luminosity is None:
-          dbstore.flush()
-          sample.luminosity = sample.getLuminosity()
+            sample.luminosity = sample.getLuminosity()
+
+        print sample
+
+        if confirm(prompt="Insert into the database?", resp=True):
+            dbstore.commit()
+            return
+
     else:
-      existing = checkExisting.one()
-      prompt  = "Replace existing "
-      prompt += str(existing)
-      prompt += "\nby new "
-      prompt += str(sample)
-      prompt += "\n?"
-      if confirm(prompt, resp=False):
-        existing.replaceBy(sample)
-        if existing.luminosity is None:
-          dbstore.flush()
-          existing.luminosity = existing.getLuminosity()
-    # commit
-    dbstore.commit()
+        sample.luminosity = sample.getLuminosity()
+        prompt  = "A sample with the same name already exists in the database. Replace by:\n"
+        prompt += str(sample)
+        prompt += "\n?"
+        if confirm(prompt, resp=False):
+            dbstore.commit()
+            return
+
+    # rollback
+    dbstore.rollback()
 
 
 def main():
     options = get_options()
-    ingridStoragePrefix = "/storage/data/cms"
+
+    import platform
+    if 'ingrid' in platform.node():
+        storagePrefix = "/storage/data/cms"
+    else:
+        storagePrefix = "root://cms-xrd-global.cern.ch/"
 
     print "##### Get information out of the crab config file (work area, dataset, pset)"
     module = load_file(options.CrabConfig)
@@ -134,6 +182,8 @@ def main():
     psetName = module.config.JobType.psetName
     inputDataset = unicode(module.config.Data.inputDataset)
     print "done"
+
+    print("")
     
     print "##### Check if the dataset exists in the database"
     # if yes then grab its ID
@@ -152,16 +202,16 @@ def main():
     # if there is more than one sample then we're in trouble, crash here
     assert( len(values) == 1 )
     dataset_name, dataset_id, dataset_nevents = values[0]
-    print "True"
+    print "done"
+
+    print("")
     
-    print "##### Get info from crab (logs, outputs, report)"
+    print "##### Get info from crab (outputs, report)"
     # Since the API outputs AND prints the same data, hide whatever is printed on screen
     saved_stdout, saved_stderr = sys.stdout, sys.stderr
     if not options.debug:
         sys.stdout = sys.stderr = open(os.devnull, "w")
     taskdir = os.path.join(workArea, 'crab_' + requestName)
-    # list logs
-    log_files = crabCommand('getlog', '--dump', dir = taskdir )
     # list output
     output_files = crabCommand('getoutput', '--dump', dir = taskdir )
     # get crab report
@@ -174,6 +224,39 @@ def main():
 #    print "report=", report
     print "done"
 
+    print("")
+
+    print "##### Get information from the output files"
+    files = []
+    for (i, lfn) in enumerate(output_files['lfn']):
+        pfn = output_files['pfn'][i]
+        files.append({'lfn': lfn, 'pfn': pfn})
+
+    folder = os.path.dirname(output_files['lfn'][0])
+    folder = storagePrefix + folder
+
+    db_files = []
+    dataset_sumw = 0
+    dataset_nselected = 0
+    for f in files:
+        (sumw, entries) = get_file_data(storagePrefix + f['lfn'])
+        if not sumw:
+            print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
+
+        dataset_sumw += sumw
+
+        if not entries:
+            print("Warning: failed to retrieve number of entries for %r" % f['lfn'])
+
+        dataset_nselected += entries
+
+        db_files.append(File(unicode(f['lfn']), unicode(f['pfn']), sumw, entries))
+
+    print "∑w = %.4f" % dataset_sumw
+    print "Number of selected events: %d" % dataset_nselected
+
+    print("")
+
     print "##### Check if the job processed the whole sample"
     has_job_processed_everything = (dataset_nevents == report['eventsRead'])
     is_data = (module.config.Data.splitting == 'LumiBased')
@@ -184,23 +267,11 @@ def main():
             # This is data, it is expected to not run on everything given we use a lumiMask
             print "done"
         else:
-            # be scary
-            print "!!!!! < BEWARE> !!!!!"
-            print "You are about to add in the DB a sample which has not been completely processed"
-            print "dataset_nevents=", dataset_nevents
-            print "report['eventsRead']= ", report['eventsRead']
-            print "This is fine, as long as you are sure this is what you want to do?"
-            print "PLEASE CHECK CRAB WILL NOT TRY RESUBMITTING THE JOBS!"
-            print "Currently this area is _VERY_ weakly protected in the whole workflow"
-            print "The script will delete from disk output files that crab is not aware of"
-            print "If you did not read this long warning, then the fault is on you...."
-            print "!!!!! </BEWARE> !!!!!"
-            print "I accept the consequences [Y/n] "
-            choice = raw_input().lower()
-            if not(choice == '' or choice == "yes" or choice == "y"):
-                print "has_job_processed_everything=", has_job_processed_everything
-                raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
+            # Warn
+            print "Warning: You are about to add in the DB a sample which has not been completely processed (%d events out of %d, %.2f%%)" % (report['eventsRead'], dataset_nevents, report['eventsRead'] / dataset_nevents * 100)
+            print "If you want to update this sample later on with more statistics, simply re-execute this script with the same arguments."
 
+    print("")
 
     print "##### Figure out the code(s) version"
     # first the version of the framework
@@ -210,69 +281,7 @@ def main():
     AnaHash, AnaBranch, AnaUrl = getGitTagBranchUrl( os.path.dirname( psetName ) )
     print "AnaUrl=", AnaUrl
 
-    print "##### Figure out the number of selected events"
-    # Need to get this from the output log of the jobs, and sum them all
-#    log_files = {'lfn': ['/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/log/cmsRun_1.log.tar.gz'], 'pfn': ['srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/log/cmsRun_1.log.tar.gz']}
-    nselected = 0
-    for lfn in log_files['lfn']:
-        # Workaround because crab -getlob returns the log of *all* the jobs, event the failed ones => file parsing fails
-        if 'failed' not in lfn:
-            tarLog =  ingridStoragePrefix + lfn
-            with tarfile.open(tarLog) as tar:
-                for tarFile in tar.getmembers():
-                    if 'stdout' not in tarFile.name:
-                        continue
-                    # For some reason, even though we are using python 2.7, the with statement here seems broken... Using contextlib to handle the file opening / reading cleanly
-                    with contextlib.closing(tar.extractfile(tarFile)) as file:
-                        for line in file:
-                            if 'processed' not in line and 'selected' not in line:
-                                continue
-                            l = line.split()
-                            nselected  += int(line.split()[3])
-    print "nselected=", nselected
-
-    print "##### For the path, check that the files there do correspond EXACTLY to the list of output files from crab"
-    # (crab being crab, we're never too careful!)
-#    output_files = {'lfn': ['/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/output_mc_1.root'], 'pfn': ['srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/obondu/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_13TeV-madgraph/GluGluToRadionToHHTo2B2VTo2L2Nu_M-260_narrow_Asympt25ns/150728_092137/0000/output_mc_1.root']}
-    # first check what we do have locally
-    p = os.path.dirname( output_files['lfn'][0] )
-    localpath = ingridStoragePrefix + p
-    localfiles = [ os.path.join(p, f) for f in os.listdir(localpath) if os.path.isfile( os.path.join(localpath, f) ) and 'root' in f ]
-    # unordered comparison: the two list should be equal
-    if set(localfiles) != set(output_files['lfn']):
-        if len(localfiles) < len(output_files['lfn']):
-            print "ERROR: the content of the path and the list of crab outputs are different, abort now!"
-            print "localfiles (what's here locally)= ", localfiles
-            print "outputfiles (what crab is saying)= ", output_files['lfn']
-            raise AssertionError("CRAB3 and local list of files do not match")
-        else:
-            if not has_job_processed_everything:
-                print "More local files than crab expected, trusting crab (as you chose to)"
-                files_to_delete = list(set(localfiles) - set(output_files['lfn']))
-                print "The following files will be deleted from disk:"
-                print files_to_delete
-                print "Yes, I am sure of what I am doing, go on and delete these files [Y/n] "
-                choice = raw_input().lower()
-                if not(choice == '' or choice == "yes" or choice == "y"):
-                    raise AssertionError("User chose to not enter incomplete crab job in the database, aborting")
-                else:
-                    for file in files_to_delete:
-                        print "Deleting file", ingridStoragePrefix + file
-                        os.remove(ingridStoragePrefix + file)
-            else:
-                print "Something wrong is going on, aborting"
-                raise AssertionError("CRAB3 and local list of files do not match")
-#    print localpath 
-    print "True"
-
-    print "##### Get the sum of weights from the output files"
-    rootfiles = [ os.path.join(localpath, f) for f in os.listdir(localpath) if os.path.isfile( os.path.join(localpath,f) ) and "root" in f ]
-    sumw = 0.
-    for rootfile in rootfiles:
-        f = ROOT.TFile(rootfile)
-        sumw += f.Get("event_weight_sum").GetVal()
-        f.Close()
-    print "sumw=", sumw
+    print("")
 
     print "##### Put it all together: write this sample into the database"
     # all the info we have gathered is:
@@ -287,10 +296,10 @@ def main():
     # report
     # FWHash, FWBranch, FWUrl
     # AnaHash, AnaBranch, AnaUrl
-    # nselected
+    # dataset_nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaHash
-    add_sample(NAME, localpath, "NTUPLES", report['eventsRead'], nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents)
+    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, has_job_processed_everything, dataset_nevents, db_files)
 
 if __name__ == '__main__':
     main() 
