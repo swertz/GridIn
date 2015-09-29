@@ -77,7 +77,7 @@ def get_dataset(inputDataset):
     resultset = dbstore.find(Dataset, Dataset.name==inputDataset)
     return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents))
 
-def getGitTagBranchUrl(gitCallPath):
+def getGitTagRepoUrl(gitCallPath):
     # get the stuff needed to write a valid url: name on github, name of repo, for both origin and upstream
     proc = subprocess.Popen(['git', 'remote', 'show', 'origin'], cwd = gitCallPath, stdout=subprocess.PIPE)
     remoteOrigin = proc.stdout.read()
@@ -100,12 +100,14 @@ def getGitTagBranchUrl(gitCallPath):
     branch = proc.stdout.read()
     if( 'upstream' in branch ):
         url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + gitHash
+        repo = repoUpstream
     elif( 'origin' in branch ):
         url = "https://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + gitHash
+        repo = repoOrigin
     else:
         print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
-    return gitHash, branch, url
+    return gitHash, repo, url
 
 def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents, files):
     dbstore = DbStore()
@@ -275,10 +277,10 @@ def main():
 
     print "##### Figure out the code(s) version"
     # first the version of the framework
-    FWHash, FWBranch, FWUrl = getGitTagBranchUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
+    FWHash, FWRepo, FWUrl = getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
     print "FWUrl=", FWUrl
     # then the version of the analyzer
-    AnaHash, AnaBranch, AnaUrl = getGitTagBranchUrl( os.path.dirname( psetName ) )
+    AnaHash, AnaRepo, AnaUrl = getGitTagRepoUrl( os.path.dirname( psetName ) )
     print "AnaUrl=", AnaUrl
 
     print("")
@@ -294,11 +296,11 @@ def main():
     # log_files
     # output_files
     # report
-    # FWHash, FWBranch, FWUrl
-    # AnaHash, AnaBranch, AnaUrl
+    # FWHash, FWRepo, FWUrl
+    # AnaHash, AnaRepo, AnaUrl
     # dataset_nselected
     # localpath
-    NAME = requestName + '_' + FWHash + '_' + AnaHash
+    NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
     add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, has_job_processed_everything, dataset_nevents, db_files)
 
 if __name__ == '__main__':
