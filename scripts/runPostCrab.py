@@ -109,7 +109,7 @@ def getGitTagRepoUrl(gitCallPath):
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, repo, url
 
-def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents, files):
+def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents, files, processed_lumi=None):
     dbstore = DbStore()
 
     sample = None
@@ -140,6 +140,14 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
         sample.user_comment = u""
     sample.source_dataset_id = dataset_id
     sample.author = unicode(getpwuid(os.stat(os.getcwd()).st_uid).pw_name)
+
+    if processed_lumi:
+        # Convert to json
+        import json
+        processed_lumi = json.dumps(processed_lumi, separators=(',', ':'))
+        sample.processed_lumi = unicode(processed_lumi)
+    else:
+        sample.processed_lumi = None
 
     for f in files:
         sample.files.add(f)
@@ -275,6 +283,10 @@ def main():
 
     print("")
 
+    processed_lumi = None
+    if is_data:
+        processed_lumi = report['analyzedLumis']
+
     print "##### Figure out the code(s) version"
     # first the version of the framework
     FWHash, FWRepo, FWUrl = getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
@@ -301,7 +313,7 @@ def main():
     # dataset_nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, has_job_processed_everything, dataset_nevents, db_files)
+    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
 
 if __name__ == '__main__':
     main() 
