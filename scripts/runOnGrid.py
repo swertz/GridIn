@@ -91,6 +91,12 @@ def submit(dataset, opt):
     c.JobType.psetName = options.psetName
     c.JobType.outputFiles.append(options.outputFile)
 
+    if hasattr(module.process, 'gridin') and hasattr(module.process.gridin, 'input_files') and len(module.process.gridin.input_files) > 0:
+        if not hasattr(c.JobType, 'inputFiles'):
+            c.JobType.inputFiles = []
+
+        c.JobType.inputFiles += module.process.gridin.input_files
+
     c.General.requestName = opt['name']
     c.Data.publishDataName = opt['name']
 
