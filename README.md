@@ -43,7 +43,7 @@ already included (see inside ``test/datasets``). The structure of the JSON file 
 You can now run on the grid. Go to the ``test`` folder, and run
 
 ```bash
-runOnGrid.py -f datasets/mc_TT.json -c <Your_Configuration_File> --mc
+runOnGrid.py -c <Your_Configuration_File> --mc datasets/mc_TT.json datasets/mc_DY.json <datasets/...>
 ```
 
 ``<Your_Configuration_File>`` must be substituted by the name of the configuration file, *including the ``.py`` extension*.

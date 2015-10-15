@@ -20,8 +20,6 @@ def get_options():
     Parse and return the arguments provided by the user.
     """
     parser = argparse.ArgumentParser(description='Launch crab over multiple datasets.')
-    parser.add_argument('-f', '--datasets', type=str, required=True, action='append', dest='datasets', metavar='FILE',
-                        help='JSON files listings datasets to run over.')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--mc', action='store_true', dest='mc', help='Run over MC datasets',)
@@ -38,6 +36,9 @@ def get_options():
 
     parser.add_argument('-l', '--lumi-mask', type=str, required=False, dest='lumi_mask', metavar='URL',
                         help='URL to the luminosity mask to use when running on data')
+
+    parser.add_argument('datasets', type=str, nargs='+', metavar='FILE',
+                        help='JSON files listings datasets to run over.')
 
     options = parser.parse_args()
 
