@@ -20,8 +20,6 @@ def get_options():
     Parse and return the arguments provided by the user.
     """
     parser = argparse.ArgumentParser(description='Launch crab over multiple datasets.')
-    parser.add_argument('-f', '--datasets', type=str, required=True, action='append', dest='datasets', metavar='FILE',
-                        help='JSON files listings datasets to run over.')
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--mc', action='store_true', dest='mc', help='Run over MC datasets',)
@@ -35,6 +33,12 @@ def get_options():
 
     parser.add_argument('-j', '--cores', type=int, action='store', dest='processes', metavar='N', default='4',
                         help='Number of core to use during the crab tasks creation')
+
+    parser.add_argument('-l', '--lumi-mask', type=str, required=False, dest='lumi_mask', metavar='URL',
+                        help='URL to the luminosity mask to use when running on data')
+
+    parser.add_argument('datasets', type=str, nargs='+', metavar='FILE',
+                        help='JSON files listings datasets to run over.')
 
     options = parser.parse_args()
 
@@ -123,8 +127,10 @@ def submit(dataset, opt):
 
     if options.data:
         c.Data.runRange = '%d-%d' % (opt['run_range'][0], opt['run_range'][1])
-        c.Data.lumiMask = opt['certified_lumi_file'] if 'certified_lumi_file' in opt else\
-            'https://cms-service-dqm.web.cern.ch/cms-service-dqm/CAF/certification/Collisions15/13TeV/Cert_246908-247381_13TeV_PromptReco_Collisions15_ZeroTesla_JSON.txt'
+        if not 'certified_lumi_file' in opt and not options.lumi_mask:
+            raise Exception('You are running on data but no luminosity mask is specified for task %r. Please add the \'--lumi-mask\' argument or use the \'certified_lumi_file\' key inside the JSON file' % (opt['name']))
+
+        c.Data.lumiMask = options.lumi_mask if options.lumi_mask else opt['certified_lumi_file']
 
     # Create output file in case something goes wrong with submit
     crab_config_file = 'crab_' + opt['name'] + '.py'
