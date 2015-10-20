@@ -13,5 +13,5 @@
     "name": "TT_Mtt-700to1000_TuneCUETP8M1_13TeV-powheg-pythia8_MiniAODv2",
     "units_per_job": 5,
     "era": "25ns"
-  },
+  }
 }
