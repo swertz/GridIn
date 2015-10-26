@@ -39,7 +39,7 @@
     "units_per_job": 5,
     "era": "25ns"
   },
-  "/QCD_Pt-300toInf_EMEnriched_TuneCUETP8M1_13TeV_pythia8/RunIISpring15DR74-Asympt25ns_MCRUN2_74_V9-v2/MINIAODSIM": {
+  "/QCD_Pt-300toInf_EMEnriched_TuneCUETP8M1_13TeV_pythia8/RunIISpring15MiniAODv2-74X_mcRun2_asymptotic_v2-v1/MINIAODSIM": {
     "name": "QCD_Pt-300toInf_EMEnriched_TuneCUETP8M1_13TeV_pythia8_25ns",
     "units_per_job": 5,
     "era": "25ns"
