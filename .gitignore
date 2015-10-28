@@ -61,3 +61,6 @@ test/crab_*.py
 
 # VIM tmp files
 *.swp
+
+# CheckMyProd outputs
+prod_*.json
