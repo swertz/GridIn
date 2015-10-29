@@ -91,13 +91,13 @@ def main():
         with open(outjson) as f:
             data = json.load(f)
     
-    for t in data[u'COMPLETED']:
-        if t in data[u'GRIDIN-INDB']:
-            continue
-        s = str(t).strip('crab_') + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-        s_id = get_sample(unicode(s))
-        if len(s_id) > 0:
-            data['GRIDIN-INDB'].append(t)
+        for t in data[u'COMPLETED']:
+            if t in data[u'GRIDIN-INDB']:
+                continue
+            s = str(t).strip('crab_') + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
+            s_id = get_sample(unicode(s))
+            if len(s_id) > 0:
+                data['GRIDIN-INDB'].append(t)
     
     #####
     # Loop over the tasks and perform a crab status
