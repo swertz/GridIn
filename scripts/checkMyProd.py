@@ -103,7 +103,7 @@ def main():
     # Loop over the tasks and perform a crab status
     #####
     for task in alltasks:
-        if unicode(task) in data[u'GRIDIN-INDB']:
+        if len(data) > 0 and unicode(task) in data[u'GRIDIN-INDB']:
             tasks['GRIDIN-INDB'].append(task)
             continue
         taskdir = os.path.join('tasks/', task)
