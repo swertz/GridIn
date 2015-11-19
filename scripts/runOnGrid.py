@@ -102,7 +102,7 @@ def submit(dataset, opt):
         c.JobType.inputFiles += module.process.gridin.input_files
 
     c.General.requestName = opt['name']
-    c.Data.publishDataName = opt['name']
+    c.Data.outputDatasetTag = opt['name']
 
     c.Data.inputDataset = dataset
     c.Data.unitsPerJob = opt['units_per_job']
