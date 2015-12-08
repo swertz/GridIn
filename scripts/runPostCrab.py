@@ -22,7 +22,7 @@ sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/sit
 
 from SAMADhi import Dataset, Sample, File, DbStore
 import das_import
-from userPrompt import confirm
+
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
 
@@ -159,18 +159,16 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
 
         print sample
 
-        if confirm(prompt="Insert into the database?", resp=True):
-            dbstore.commit()
-            return
+        dbstore.commit()
+        return
 
     else:
         sample.luminosity = sample.getLuminosity()
-        prompt  = "A sample with the same name already exists in the database. Replace by:\n"
-        prompt += str(sample)
-        prompt += "\n?"
-        if confirm(prompt, resp=False):
-            dbstore.commit()
-            return
+        print("Sample updated")
+        print(sample)
+
+        dbstore.commit()
+        return
 
     # rollback
     dbstore.rollback()
