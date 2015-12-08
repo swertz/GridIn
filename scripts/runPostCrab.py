@@ -267,10 +267,13 @@ def main():
     db_files = []
     dataset_sumw = 0
     dataset_nselected = 0
+    file_missing = False
     for f in files:
         (sumw, entries) = get_file_data(storagePrefix + f['lfn'])
         if not sumw:
             print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
+            file_missing = True
+            continue
 
         dataset_sumw += sumw
 
@@ -283,11 +286,12 @@ def main():
 
     print "∑w = %.4f" % dataset_sumw
     print "Number of selected events: %d" % dataset_nselected
+    print "Number of output files (crab / really on the storage): %d / %d" % (len(files), len(db_files))
 
     print("")
 
     print "##### Check if the job processed the whole sample"
-    has_job_processed_everything = (dataset_nevents == report['eventsRead'])
+    has_job_processed_everything = (dataset_nevents == report['eventsRead']) and not file_missing
     is_data = (module.config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
