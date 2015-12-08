@@ -11,6 +11,20 @@ import tarfile
 import contextlib
 from pwd import getpwuid
 
+# FIXME: Remove as soon as possible
+# Fix for very slow `crab report`
+# See https://github.com/dmwm/CRABClient/pull/4579 for details
+# This is a temporary fix until it's fixed upstream
+from CRABClient.JobType.BasicJobType import BasicJobType
+from WMCore.DataStructs.LumiList import LumiList
+def fast_getDoubleLumis(lumisDict):
+    doubleLumis = set()
+    for run, lumis in lumisDict.iteritems():
+        seen = set()
+        doubleLumis.update(set((run, lumi) for lumi in lumis if (run, lumi) in seen or seen.add((run, lumi))))
+    doubleLumis = LumiList(lumis=doubleLumis)
+    return doubleLumis.getCompactList()
+
 # import SAMADhi stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
@@ -22,7 +36,7 @@ sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/sit
 
 from SAMADhi import Dataset, Sample, File, DbStore
 import das_import
-from userPrompt import confirm
+
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
 
@@ -159,24 +173,29 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
 
         print sample
 
-        if confirm(prompt="Insert into the database?", resp=True):
-            dbstore.commit()
-            return
+        dbstore.commit()
+        return
 
     else:
         sample.luminosity = sample.getLuminosity()
-        prompt  = "A sample with the same name already exists in the database. Replace by:\n"
-        prompt += str(sample)
-        prompt += "\n?"
-        if confirm(prompt, resp=False):
-            dbstore.commit()
-            return
+        print("Sample updated")
+        print(sample)
+
+        dbstore.commit()
+        return
 
     # rollback
     dbstore.rollback()
 
 
 def main():
+
+    # FIXME: Fix for very slow `crab report`
+    # See https://github.com/dmwm/CRABClient/pull/4579 for details
+    # This is a temporary fix until it's fixed upstream
+
+    BasicJobType.getDoubleLumis = staticmethod(fast_getDoubleLumis)
+
     options = get_options()
 
     import platform
@@ -248,10 +267,13 @@ def main():
     db_files = []
     dataset_sumw = 0
     dataset_nselected = 0
+    file_missing = False
     for f in files:
         (sumw, entries) = get_file_data(storagePrefix + f['lfn'])
         if not sumw:
             print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
+            file_missing = True
+            continue
 
         dataset_sumw += sumw
 
@@ -264,11 +286,12 @@ def main():
 
     print "∑w = %.4f" % dataset_sumw
     print "Number of selected events: %d" % dataset_nselected
+    print "Number of output files (crab / really on the storage): %d / %d" % (len(files), len(db_files))
 
     print("")
 
     print "##### Check if the job processed the whole sample"
-    has_job_processed_everything = (dataset_nevents == report['eventsRead'])
+    has_job_processed_everything = (dataset_nevents == report['eventsRead']) and not file_missing
     is_data = (module.config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
