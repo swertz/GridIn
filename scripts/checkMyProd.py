@@ -55,6 +55,7 @@ def main():
     tasks['UNKNOWN'] = []
     tasks['QUEUED'] = []
     tasks['FAILED'] = []
+    tasks['KILLED'] = []
     # GRIDIN status
     tasks['GRIDIN-INDB'] = []
     
