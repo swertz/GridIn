@@ -119,7 +119,7 @@ def getGitTagRepoUrl(gitCallPath):
         url = "https://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + gitHash
         repo = repoOrigin
     elif( '/' in branch ):
-        url = "https://github.com/" + branch.split("/")[0] + "/" + repoOrigin + "/tree/" + branch.split("/")[1]
+        url = "https://github.com/" + branch.strip(" ").split("/")[0] + "/" + repoOrigin + "/tree/" + branch.strip(" ").split("/")[1]
         repo = repoOrigin
     else:
         print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
