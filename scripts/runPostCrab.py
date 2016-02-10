@@ -11,20 +11,6 @@ import tarfile
 import contextlib
 from pwd import getpwuid
 
-# FIXME: Remove as soon as possible
-# Fix for very slow `crab report`
-# See https://github.com/dmwm/CRABClient/pull/4579 for details
-# This is a temporary fix until it's fixed upstream
-from CRABClient.JobType.BasicJobType import BasicJobType
-from WMCore.DataStructs.LumiList import LumiList
-def fast_getDoubleLumis(lumisDict):
-    doubleLumis = set()
-    for run, lumis in lumisDict.iteritems():
-        seen = set()
-        doubleLumis.update(set((run, lumi) for lumi in lumis if (run, lumi) in seen or seen.add((run, lumi))))
-    doubleLumis = LumiList(lumis=doubleLumis)
-    return doubleLumis.getCompactList()
-
 # import SAMADhi stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
@@ -192,13 +178,6 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
 
 
 def main():
-
-    # FIXME: Fix for very slow `crab report`
-    # See https://github.com/dmwm/CRABClient/pull/4579 for details
-    # This is a temporary fix until it's fixed upstream
-
-    BasicJobType.getDoubleLumis = staticmethod(fast_getDoubleLumis)
-
     options = get_options()
 
     import platform
