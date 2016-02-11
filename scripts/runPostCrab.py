@@ -9,6 +9,7 @@ import sys
 import subprocess
 import tarfile
 import contextlib
+import json
 from pwd import getpwuid
 
 # import SAMADhi stuff
@@ -38,17 +39,53 @@ def get_file_data(pfn):
     if not f:
         return (None, None)
 
-    sumw = f.Get("event_weight_sum")
-    if sumw:
-        sumw = sumw.GetVal()
+    nominal_sumw = f.Get("event_weight_sum")
+    if nominal_sumw:
+        nominal_sumw = nominal_sumw.GetVal()
     else:
-        sumw = None
+        nominal_sumw = None
 
+    # Grab extras sum of event weight
+    extras_sumw = {}
+    for key in f.GetListOfKeys():
+        if key.GetName().startswith('event_weight_sum_'):
+            suffix = key.GetName().replace('event_weight_sum_', '')
+            obj = key.ReadObj()
+            if obj:
+                extras_sumw[suffix] = obj.GetVal()
+
+    entries = None
     tree = f.Get("t")
     if tree:
-        return (sumw, tree.GetEntriesFast())
-    else:
-        return (sumw, None)
+        entries = tree.GetEntriesFast()
+
+    return (nominal_sumw, extras_sumw, entries)
+
+def sum_dicts(a, b):
+    """
+    Sum each value of the dicts a et b and return a new dict
+    """
+
+    if len(a) == 0 and len(b) == 0:
+        return {}
+
+    if len(a) == 0:
+        for key in b.viewkeys():
+            a[key] = 0
+
+    if len(b) == 0:
+        for key in a.viewkeys():
+            b[key] = 0
+
+    if a.viewkeys() != b.viewkeys():
+        print("Warning: files content are different. This is not a good sign, something really strange happened!")
+        return None
+
+    r = {}
+    for key in a.viewkeys():
+        r[key] = a[key] + b[key]
+
+    return r
 
 def get_options():
     """
@@ -112,7 +149,7 @@ def getGitTagRepoUrl(gitCallPath):
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, repo, url
 
-def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, has_job_processed_everything, dataset_nevents, files, processed_lumi=None):
+def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, extras_sumw, has_job_processed_everything, dataset_nevents, files, processed_lumi=None):
     dbstore = DbStore()
 
     sample = None
@@ -135,7 +172,7 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
     sample.nevents = nselected
     sample.normalization = 1
     sample.event_weight_sum = sumw
-#    sample.luminosity  = 40028954.499 / 1e6 # FIXME: figure out the fix for data whenever the tools will stabilize and be on cvmfs
+    sample.extras_event_weight_sum = unicode(json.dumps(extras_sumw, separators=(',', ':')))
     sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
     if not has_job_processed_everything:
         sample.user_comment = unicode("Sample was not fully processed, only " + str(nevents) + "/" + str(dataset_nevents) + " events were processed")
@@ -146,7 +183,6 @@ def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset
 
     if processed_lumi:
         # Convert to json
-        import json
         processed_lumi = json.dumps(processed_lumi, separators=(',', ':'))
         sample.processed_lumi = unicode(processed_lumi)
     else:
@@ -243,28 +279,36 @@ def main():
         pfn = output_files['pfn'][i]
         files.append({'lfn': lfn, 'pfn': pfn})
 
+    # DEBUG
+    #files.append({'lfn': '/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root', 'pfn': 'srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root'})
+
     folder = os.path.dirname(output_files['lfn'][0])
     folder = storagePrefix + folder
 
     db_files = []
     dataset_sumw = 0
+    dataset_extras_sumw = {}
     dataset_nselected = 0
     file_missing = False
     for f in files:
-        (sumw, entries) = get_file_data(storagePrefix + f['lfn'])
+        (sumw, extras_sumw, entries) = get_file_data(storagePrefix + f['lfn'])
         if not sumw:
             print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
             file_missing = True
             continue
 
         dataset_sumw += sumw
+        dataset_extras_sumw = sum_dicts(dataset_extras_sumw, extras_sumw)
 
         if not entries:
             print("Warning: failed to retrieve number of entries for %r" % f['lfn'])
 
         dataset_nselected += entries
 
-        db_files.append(File(unicode(f['lfn']), unicode(f['pfn']), sumw, entries))
+        # Convert python dict to json
+        extras_sumw_json = unicode(json.dumps(extras_sumw, separators=(',', ':')))
+
+        db_files.append(File(unicode(f['lfn']), unicode(f['pfn']), sumw, extras_sumw_json, entries))
 
     print "∑w = %.4f" % dataset_sumw
     print "Number of selected events: %d" % dataset_nselected
@@ -318,7 +362,7 @@ def main():
     # dataset_nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
+    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
 
 if __name__ == '__main__':
     main() 
