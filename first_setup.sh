@@ -7,7 +7,7 @@ then
     echo
     return 1
 fi
-cd ${CMSSW_BASE}/src/cp3_llbb/GridIn
+pushd ${CMSSW_BASE}/src/cp3_llbb/GridIn > /dev/null
 # configure the origin repository
 GITHUBUSERNAME=`git config user.github`
 GITHUBUSERREMOTE=`git remote -v | grep upstream | awk '{print $2}' | head -n 1 | cut -d / -f 2`
@@ -24,3 +24,8 @@ git remote add vidalm https://github.com/vidalm/GridIn.git
 git remote add camillebeluffi https://github.com/camillebeluffi/GridIn.git
 git remote add acaudron https://github.com/acaudron/GridIn.git
 git remote add AlexandreMertens https://github.com/AlexandreMertens/GridIn.git
+
+pushd ${CMSSW_BASE}/src/cp3_llbb/GridIn/test > /dev/null
+ln -s -d ${CMSSW_BASE}/src/cp3_llbb/Datasets/datasets datasets
+popd > /dev/null
+popd > /dev/null
