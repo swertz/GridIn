@@ -5,6 +5,7 @@ GridIn: tools for running over grid
  - This guide suppose that the framework is already installed. See https://github.com/cp3-llbb/Framework for detailed instructions
  - This guide also installs our local database [SAMADhi](https://github.com/cp3-llbb/SAMADhi)
  - You probably want to have the access to this database: ask around!
+ - This guide also installs [Datasets](https://github.com/cp3-llbb/Datasets), our repo to list the datasets to be ran on
  - The utilities in the ``scripts`` folders are copied to ``CMSSW/bin`` during the ``scram b``, so if these utilities have been modified you need to rebuild in order to have them in your PATH
 
 # First time setup
@@ -20,10 +21,11 @@ cmsenv
 cd ${CMSSW_BASE}/src
 git clone -o upstream git@github.com:cp3-llbb/GridIn.git cp3_llbb/GridIn
 git clone -o upstream git@github.com:cp3-llbb/SAMADhi.git cp3_llbb/SAMADhi
+git clone -o upstream git@github.com:cp3-llbb/Datasets.git cp3_llbb/Datasets
 
 scram b -j 4
 cd ${CMSSW_BASE}/src/cp3_llbb/GridIn
-source setup.sh
+source first_setup.sh
 ```
 
 # How-to

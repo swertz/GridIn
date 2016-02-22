@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+__init__.py
 
 # C extensions
 *.so
@@ -58,6 +59,8 @@ target/
 
 # CRAB3 stuff
 test/crab_*.py
+test/datasets
+test/tasks
 
 # VIM tmp files
 *.swp
