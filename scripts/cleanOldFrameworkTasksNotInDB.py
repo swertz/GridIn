@@ -8,9 +8,11 @@ import os
 import sys
 import subprocess
 import json
+import tarfile
+import contextlib
 from pwd import getpwuid
 from os import listdir
-from os.path import join, isfile, isdir
+from os.path import join, isfile, isdir, dirname
 import datetime as dt
 
 # import SAMADhi stuff
@@ -24,6 +26,19 @@ sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/sit
 
 from SAMADhi import Dataset, Sample, File, DbStore
 
+def get_options():
+    """
+    Parse and return the arguments provided by the user.
+    """
+    username = getpwuid(os.stat(os.getcwd()).st_uid).pw_name
+    parser = argparse.ArgumentParser(description='Provide a list of things to be deleted in /storage/data/cms/store/user/')
+    parser.add_argument('--crabUsername', action='store', dest='crabUsername', default=username, type=str,
+        help='crab / storage username')
+    parser.add_argument('--ingridUsername', action='store', dest='ingridUsername', default=username, type=str,
+        help='ingrid username')
+    options = parser.parse_args()
+    return options
+
 def get_dataset(inputDataset = None, inputID = None):
     dbstore = DbStore()
     if inputDataset is not None:
@@ -32,22 +47,24 @@ def get_dataset(inputDataset = None, inputID = None):
         resultset = dbstore.find(Dataset, Dataset.dataset_id == inputID)
     return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents, Dataset.process))
 
-def main():
-    username = getpwuid(os.stat(os.getcwd()).st_uid).pw_name
+def main(crabUsername, ingridUsername):
+    print crabUsername, ingridUsername
     dbstore = DbStore()
 
     print "##### Get the list of potential DB samples of interest"
     list_allDBsamples = []
     results = dbstore.find(Sample)
     for r in results:
-        if username in r.path or username in r.author:
+        if r.author is None:
+            continue
+        if crabUsername in r.path or ingridUsername in r.author:
             if r.path == '':
                 continue
             list_allDBsamples.append(r.path)
 #            print r.path
     print ""
 
-    storageDir = join('/storage/data/cms/store/user/', username)
+    storageDir = join('/storage/data/cms/store/user/', crabUsername)
     print "##### Get the list of user paths in %s" % storageDir
 
     list_allUserDirs = {}
@@ -71,16 +88,18 @@ def main():
                     if not isdir(join(storageDir, d, subd, taskStamp, taskID)):
                         continue
                     myPath = join(storageDir, d, subd, taskStamp, taskID)
-                    if myPath not in list_allDBsamples:
-                        mySize = subprocess.check_output(["du", '-s', myPath]).split()[0].decode('utf-8')
-                        list_allUserDirs[ttask] = {'path': myPath, 'size': int(mySize) * 1024}
+                    if myPath in list_allDBsamples:
+                        continue
+#                    print isFramework(myPath), myPath
+                    mySize = subprocess.check_output(["du", '-s', myPath]).split()[0].decode('utf-8')
+                    list_allUserDirs[ttask] = {'path': myPath, 'size': int(mySize) * 1024, 'is CP3-llbb': isFramework(myPath)}
 
     print '# Tasks older than 6 months'
     print '# timestamp= ', getDateMinusT(currentTime, month = 6)
     totalSize = 0
     finalprint = ''
     for t in list_allUserDirs:
-        if t < getDateMinusT(currentTime, month = 6):
+        if t < getDateMinusT(currentTime, month = 6) and list_allUserDirs[t]['is CP3-llbb']:
             totalSize += list_allUserDirs[t]['size']
             finalprint += "# size= %s\nrm -r %s\n" % (sizeof_fmt(list_allUserDirs[t]['size']), list_allUserDirs[t]['path'])
     print '# totalSize= ', sizeof_fmt(totalSize)
@@ -91,7 +110,7 @@ def main():
     totalSize = 0
     finalprint = ''
     for t in list_allUserDirs:
-        if getDateMinusT(currentTime, month = 6) < t < getDateMinusT(currentTime, month = 3):
+        if getDateMinusT(currentTime, month = 6) < t < getDateMinusT(currentTime, month = 3) and list_allUserDirs[t]['is CP3-llbb']:
             totalSize += list_allUserDirs[t]['size']
             finalprint += "# size= %s\nrm -r %s\n" % (sizeof_fmt(list_allUserDirs[t]['size']), list_allUserDirs[t]['path'])
     print '# totalSize= ', sizeof_fmt(totalSize)
@@ -102,11 +121,23 @@ def main():
     totalSize = 0
     finalprint = ''
     for t in list_allUserDirs:
-        if getDateMinusT(currentTime, month = 3) < t < getDateMinusT(currentTime, month = 1):
+        if getDateMinusT(currentTime, month = 3) < t < getDateMinusT(currentTime, month = 1) and list_allUserDirs[t]['is CP3-llbb']:
             totalSize += list_allUserDirs[t]['size']
             finalprint += "# size= %s\nrm -r %s\n" % (sizeof_fmt(list_allUserDirs[t]['size']), list_allUserDirs[t]['path'])
     print '# totalSize= ', sizeof_fmt(totalSize)
     print finalprint
+
+    print '# The following tasks could not be asserted to be cp3_llbb framework tasks or not... deal with them as you see fit:'
+    totalSize = 0
+    finalprint = ''
+    for t in list_allUserDirs:
+        if not list_allUserDirs[t]['is CP3-llbb']:
+            totalSize += list_allUserDirs[t]['size']
+            finalprint += "# size= %s\tpath= %s\n" % (sizeof_fmt(list_allUserDirs[t]['size']), list_allUserDirs[t]['path'])
+    print '# totalSize= ', sizeof_fmt(totalSize)
+    print finalprint
+
+
 
 
 def getDateMinusT(currentTime, year = 0, month = 3, day = 0):
@@ -127,11 +158,45 @@ def getDateMinusT(currentTime, year = 0, month = 3, day = 0):
     return int(t)
 
 def sizeof_fmt(num, suffix='B'):
+# Taken from http://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
     for unit in ['','k','M','G','T','P','E','Z']:
         if abs(num) < 1024.0:
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Y', suffix)
 
+def isFramework(path, f = 'log/cmsRun_1.log.tar.gz'):
+    # Resurrecting some parsing code last seen in runPostCrab
+    # https://github.com/cp3-llbb/GridIn/commit/2c5b8b07b30206688d87dafb3b0a9dbfb61e71c7
+#    print path, f
+    tarLog = join(path, f)
+    if not isfile(tarLog):
+#        print "\t", isdir(dirname(tarLog)), dirname(tarLog)
+        if isdir(dirname(tarLog)):
+            logs = [x for x in listdir(dirname(tarLog)) if isfile(join(dirname(tarLog),x))]
+            return isFramework(dirname(tarLog), f = logs[0])
+        else:
+            if 'failed' not in f:
+                # maybe the log does not exist because all tasks ran and failed ?
+                return isFramework(path, f = 'failed/log/cmsRun_1.log.tar.gz')
+            else:
+                # impossible to assert if this is a FW task
+                return False
+    isFW = False
+    with tarfile.open(tarLog) as tar:
+        for tarFile in tar.getmembers():
+            if 'stdout' not in tarFile.name:
+                continue
+            # For some reason, even though we are using python 2.7, the with statement here seems broken... Using contextlib to handle the file opening / reading cleanly
+            with contextlib.closing(tar.extractfile(tarFile)) as file:
+                for line in file:
+                    if ('cp3_llbb/Framework' in line
+                        or 'HHAnalysis' in line or 'ZAAnalysis' in line or 'TTAnalysis' in line
+                        or 'hh_analyzer' in line or 'za_analyzer' in line or 'tt_analyzer' in line):
+                        isFW = True
+                        break
+        return isFW
+
 if __name__ == '__main__':
-    main() 
+    options = get_options()
+    main(options.crabUsername, options.ingridUsername) 
