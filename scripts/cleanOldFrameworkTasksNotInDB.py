@@ -48,7 +48,6 @@ def get_dataset(inputDataset = None, inputID = None):
     return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents, Dataset.process))
 
 def main(crabUsername, ingridUsername):
-    print crabUsername, ingridUsername
     dbstore = DbStore()
 
     print "##### Get the list of potential DB samples of interest"
