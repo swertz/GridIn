@@ -164,7 +164,7 @@ def add_merged_sample(NAME, type, AnaUrl, FWUrl, samples):
         results = dbstore.find(Dataset, Dataset.dataset_id == s['dataset_id'])
         dataset_nevents +=  results[0].nevents
     if len(extras_event_weight_sum) > 0:
-        sample.extras_event_weight_sum = unicode(extras_event_weight_sum)
+        sample.extras_event_weight_sum = unicode(json.dumps(extras_event_weight_sum))
     if len(processed_lumi.getCompactList()) > 0:
         sample.processed_lumi = unicode(json.dumps(processed_lumi.getCompactList()))
     sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
