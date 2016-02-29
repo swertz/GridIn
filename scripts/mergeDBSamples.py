@@ -106,7 +106,7 @@ def getGitTagRepoUrl(gitCallPath):
         raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
     return gitHash, repo, url
 
-def add_merged_sample(NAME, type, AnaUrl, FWUrl, samples):
+def add_merged_sample(NAME, type, AnaUrl, FWUrl, samples, comment):
     # samples is a simple dict containing three keys: 'process', 'dataset_id', 'sample_id'
     dbstore = DbStore()
     sample = None
@@ -169,9 +169,9 @@ def add_merged_sample(NAME, type, AnaUrl, FWUrl, samples):
         sample.processed_lumi = unicode(json.dumps(processed_lumi.getCompactList()))
     sample.code_version = unicode(AnaUrl + ' ' + FWUrl) #NB: limited to 255 characters, but so far so good
     if sample.nevents_processed != dataset_nevents:
-        sample.user_comment = unicode("Sample was not fully processed, only " + str(sample.nevents_processed) + "/" + str(dataset_nevents) + " events were processed")
+        sample.user_comment = unicode("Sample was not fully processed, only " + str(sample.nevents_processed) + "/" + str(dataset_nevents) + " events were processed. " + comment)
     else:
-        sample.user_comment = u""
+        sample.user_comment = unicode(comment)
     sample.author = unicode(getpwuid(os.stat(os.getcwd()).st_uid).pw_name)
 
     if not update:
@@ -239,6 +239,7 @@ def main():
     
     print "##### Check the samples already exist in the database"
     samples = []
+    extensions = []
     if options.CrabConfig is not None and len(options.CrabConfig) > 1:
         for CrabConfig in options.CrabConfig:
             module = load_file(CrabConfig)
@@ -251,6 +252,8 @@ def main():
             dataset = get_dataset(inputID = dataset_id)
             dataset_name, dataset_id, dataset_nevents, dataset_process = dataset[0]
             samples.append({'sample_id': sample_id, 'process':dataset_process, 'dataset_id':dataset_id})
+            if 'ext' in sample_name:
+                extensions.append( [x for x in sample_name.split('_') if 'ext' in x][0] )
     elif options.SAMPLE_ID is not None and len(options.SAMPLE_ID) > 1:
         for SAMPLE_ID in options.SAMPLE_ID:
             sample = get_sample(inputID = SAMPLE_ID)
@@ -260,6 +263,8 @@ def main():
             dataset = get_dataset(inputID = dataset_id)
             dataset_name, dataset_id, dataset_nevents, dataset_process = dataset[0]
             samples.append({'sample_id': sample_id, 'process':dataset_process, 'dataset_id':dataset_id})
+            if 'ext' in sample_name:
+                extensions.append( [x for x in sample_name.split('_') if 'ext' in x][0] )
             
     if len( set([ x['process'] for x in samples ]) ) != 1:
         print "samples=", samples
@@ -277,15 +282,26 @@ def main():
     print "##### Constructing the merged sample"
     # Note that not all info make sense since this is an artificial merging (e.g.: path)
     # So in case of ill-defined quantity, we take the one from the first sample in the list
+    # NAME will be something like PROCESS_extended_ext0_plus_ext1_TAG
     NAME = ''
-    for i, s in enumerate(samples):
+    extensions = [str(x) for x in extensions]
+    extensions.append('ext0')
+    extensions.sort()
+    for i, x in enumerate(extensions):
         if i == 0:
-            NAME += s['process']
-            NAME += '_extended_' + str(s['sample_id'])
+            NAME += samples[0]['process']
+            NAME += '_extended_' + x
         else:
-            NAME += '_plus_' + str(s['sample_id'])
+            NAME += '_plus_' + x
+    comment = 'Merging of SAMADhi samples'
+    for i, s in enumerate(samples):
+        print s
+        if i == 0:
+            comment += " %i" % int(s['sample_id'])
+        else:
+            comment += " and %i" % int(s['sample_id'])
     NAME += '_' + FWHash + '_' + AnaRepo + '_' + AnaHash 
-    add_merged_sample(NAME, 'NTUPLES', AnaUrl, FWUrl, samples)
+    add_merged_sample(NAME, 'NTUPLES', AnaUrl, FWUrl, samples, comment)
 
    
 if __name__ == '__main__':
