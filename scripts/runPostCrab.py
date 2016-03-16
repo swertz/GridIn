@@ -317,7 +317,7 @@ def main():
     print("")
 
     print "##### Check if the job processed the whole sample"
-    has_job_processed_everything = (dataset_nevents == report['eventsRead']) and not file_missing
+    has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
     is_data = (module.config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
@@ -327,14 +327,14 @@ def main():
             print "done"
         else:
             # Warn
-            print "Warning: You are about to add in the DB a sample which has not been completely processed (%d events out of %d, %.2f%%)" % (report['eventsRead'], dataset_nevents, report['eventsRead'] / dataset_nevents * 100)
+            print "Warning: You are about to add in the DB a sample which has not been completely processed (%d events out of %d, %.2f%%)" % (report['numEventsRead'], dataset_nevents, report['numEventsRead'] / dataset_nevents * 100)
             print "If you want to update this sample later on with more statistics, simply re-execute this script with the same arguments."
 
     print("")
 
     processed_lumi = None
     if is_data:
-        processed_lumi = report['analyzedLumis']
+        processed_lumi = report['processedLumis']
 
     print "##### Figure out the code(s) version"
     # first the version of the framework
@@ -353,7 +353,7 @@ def main():
     # psetName
     # inputDataset
     # dataset_id
-    # report['eventsRead']) (not necessarily equal to dataset_nevents)
+    # report['numEventsRead']) (not necessarily equal to dataset_nevents)
     # log_files
     # output_files
     # report
@@ -362,7 +362,7 @@ def main():
     # dataset_nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-    add_sample(NAME, folder, "NTUPLES", report['eventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
+    add_sample(NAME, folder, "NTUPLES", report['numEventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
 
 if __name__ == '__main__':
     main() 
