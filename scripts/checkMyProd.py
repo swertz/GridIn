@@ -50,6 +50,7 @@ def main():
     # CRAB3 status
     tasks['COMPLETED'] = []
     tasks['SUBMITFAILED'] = []
+    tasks['RESUBMITFAILED'] = []
     tasks['NEW'] = []
     tasks['SUBMITTED'] = []
     tasks['UNKNOWN'] = []
