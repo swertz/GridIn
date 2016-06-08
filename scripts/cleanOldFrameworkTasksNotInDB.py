@@ -10,6 +10,7 @@ import subprocess
 import json
 import tarfile
 import contextlib
+import re
 from pwd import getpwuid
 from os import listdir
 from os.path import join, isfile, isdir, dirname
@@ -56,10 +57,16 @@ def main(crabUsername, ingridUsername):
     for r in results:
         if r.author is None:
             continue
+        for f in r.files:
+            if crabUsername in f.lfn:
+                p = '/storage/data/cms' + re.sub('/output.*root', '', f.lfn)
+                if p not in list_allDBsamples:
+                    list_allDBsamples.append(p)
         if crabUsername in r.path or ingridUsername in r.author:
             if r.path == '':
                 continue
-            list_allDBsamples.append(r.path)
+            if r.path not in list_allDBsamples:
+                list_allDBsamples.append(r.path)
 #            print r.path
     print ""
 
