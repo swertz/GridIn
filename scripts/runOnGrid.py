@@ -34,6 +34,9 @@ def get_options():
     parser.add_argument('-j', '--cores', type=int, action='store', dest='processes', metavar='N', default='4',
                         help='Number of core to use during the crab tasks creation')
 
+    parser.add_argument("--splitting-factor", type=str, required=False, dest="splitting", metavar="SPLITTING", default="relative:1",
+                        help="Splitting factor (either 'relative:float', to be multiplied with the value in the sample json, or 'absolute:int' to set it explicitly)")
+
     parser.add_argument('-l', '--lumi-mask', type=str, required=False, dest='lumi_mask', metavar='URL',
                         help='URL to the luminosity mask to use when running on data')
 
@@ -105,7 +108,17 @@ def submit(dataset, opt):
     c.Data.outputDatasetTag = opt['name']
 
     c.Data.inputDataset = dataset
-    c.Data.unitsPerJob = opt['units_per_job']
+
+    try:
+        splittingType, splittingValueStr = options.splitting.split(":")
+        if splittingType == "relative":
+            c.Data.unitsPerJob = int(round(float(splittingValueStr)*opt['units_per_job']))
+        elif splittingType == "absolute":
+            c.Data.unitsPerJob = int(splittingValueStr)
+        else:
+            raise Exception("Invalid splitting setting '{0}', should take the form of 'relative:float' or 'absolute:int'".format(options.splitting))
+    except:
+        raise Exception("Cannot parse splitting setting '{0}', should take the form of 'relative:float' or 'absolute:int'".format(options.splitting))
 
     pyCfgParams = []
 
