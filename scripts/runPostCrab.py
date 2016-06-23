@@ -29,6 +29,7 @@ from CRABAPI.RawCommand import crabCommand
 
 # import a bit of ROOT
 import ROOT
+ROOT.PyConfig.IgnoreCommandLineOptions = True
 ROOT.gROOT.Reset()
 
 def get_file_data(pfn):
