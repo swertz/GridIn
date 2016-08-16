@@ -241,7 +241,8 @@ def main():
     # print values
     if( len(values) == 0 ):
         tmp_sysargv = sys.argv
-        sys.argv = ["das_import.py", inputDataset]
+        grid_key = os.environ['X509_USER_PROXY']
+        sys.argv = ["das_import.py", "--key", grid_key, "--cert", grid_key, inputDataset]
         print "calling das_import"
         das_import.main()
         print "done"
