@@ -240,13 +240,9 @@ def main():
     values = get_dataset(inputDataset)
     # print values
     if( len(values) == 0 ):
-        tmp_sysargv = sys.argv
-        grid_key = os.environ['X509_USER_PROXY']
-        sys.argv = ["das_import.py", "--key", grid_key, "--cert", grid_key, inputDataset]
-        print "calling das_import"
-        das_import.main()
+        print "Importing CMS dataset"
+        das_import.import_cms_dataset(inputDataset)
         print "done"
-        sys.argv = tmp_sysargv
         values = get_dataset(inputDataset)
     # if there is more than one sample then we're in trouble, crash here
     assert( len(values) == 1 )
