@@ -15,18 +15,20 @@ import argparse
 import sys
 import subprocess
 
+from multiprocessing import Pool, Lock
+lock = Lock()
+
+from cp3_llbb.GridIn.default_crab_config import create_config
+
+CMSSW_ROOT = os.path.join(os.environ['CMSSW_BASE'], 'src')
+GRIDIN_ROOT = os.path.join(os.environ['CMSSW_BASE'], 'src/cp3_llbb/GridIn')
+DATASETS_ROOT = os.path.join(os.environ['CMSSW_BASE'], 'src/cp3_llbb/Datasets')
+
 def get_options():
     """
     Parse and return the arguments provided by the user.
     """
     parser = argparse.ArgumentParser(description='Launch crab over multiple datasets.')
-
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--mc', action='store_true', dest='mc', help='Run over MC datasets',)
-    group.add_argument('--data', action='store_true', dest='data', help='Run over data datasets')
-
-    parser.add_argument('-c', '--configuration', type=str, required=True, dest='psetName', metavar='FILE',
-                        help='Analysis configuration file (including .py extension).')
 
     parser.add_argument('--submit', action='store_true', dest='submit',
                         help='Submit all the tasks to the CRAB server')
@@ -34,25 +36,32 @@ def get_options():
     parser.add_argument('-j', '--cores', type=int, action='store', dest='processes', metavar='N', default='4',
                         help='Number of core to use during the crab tasks creation')
 
-    parser.add_argument("--splitting-factor", type=str, required=False, dest="splitting", metavar="SPLITTING", default="relative:1",
-                        help="Splitting factor (either 'relative:float', to be multiplied with the value in the sample json, or 'absolute:int' to set it explicitly)")
-
     parser.add_argument('-l', '--lumi-mask', type=str, required=False, dest='lumi_mask', metavar='URL',
                         help='URL to the luminosity mask to use when running on data')
 
-    parser.add_argument('datasets', type=str, nargs='+', metavar='FILE',
-                        help='JSON files listings datasets to run over.')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('--only-mc', action='store_true', dest='only_mc', help='Only run over MC datasets',)
+    group.add_argument('--only-data', action='store_true', dest='only_data', help='Only run over data datasets')
+
+    parser.add_argument('-f', '--filter', type=str, required=False, dest='filter', metavar='FILTER',
+                        help='If specified, only keep sample groups matching this filter. Glob syntax is supported')
+
+    parser.add_argument('analyses', type=str, nargs='+', metavar='FILE',
+                        help='List of JSON file describing the analysis.')
 
     options = parser.parse_args()
 
-    if options.datasets is None:
-        parser.error('You must specify a file listings the datasets to run over.')
+    if options.analyses is None:
+        parser.error('You must specify at least one file describing an analysis.')
 
-    c = options.psetName
+    return options
+
+def findPSet(pset):
+    c = pset
     if not os.path.isfile(c):
         # Try to find the psetName file
         filename = os.path.basename(c)
-        path = os.path.join(os.environ['CMSSW_BASE'], 'src/cp3_llbb')
+        path = os.path.join(CMSSW_ROOT, 'cp3_llbb')
         c = None
         for root, dirs, files in os.walk(path):
             if filename in files:
@@ -62,41 +71,54 @@ def get_options():
         if c is None:
             raise IOError('Configuration file %r not found inside the cp3_llbb package' % filename)
 
-    options.psetName = c
+    return c
 
-    return options
+psets = {}
+def loadPSet(pset, onMC):
+    global psets
 
-options = get_options()
+    lock.acquire()
 
-# get the name of the output file
-filename = options.psetName
-directory, module_name = os.path.split(filename)
-module_name = os.path.splitext(module_name)[0]
-path = list(sys.path)
-sys.path.insert(0, directory)
-try:
-  module = __import__(module_name)
-finally:
-  sys.path[:] = path # restore
+    key = (onMC, pset)
 
-print("")
+    if key in psets:
+        lock.release()
+        return psets[key]
 
-options.outputFile = module.process.framework.output.value()
+    directory, module_name = os.path.split(pset)
+    module_name = os.path.splitext(module_name)[0]
+    old_path = list(sys.path)
+    sys.path.insert(0, directory)
 
-datasets = {}
-for dataset_file in options.datasets:
-    with open(dataset_file) as f:
-        datasets.update(json.load(f))
+    # Clean argv for CMSSW argument parser
+    old_argv = list(sys.argv)
+    sys.argv[1:] = ['runOnData=%d' % (0 if onMC else 1)]
 
-from cp3_llbb.GridIn.default_crab_config import create_config
+    print("Loading CMSSW configuration %s..." % module_name)
+    old_stdout = sys.stdout
+    try:
+        # Redirect stdout to /dev/null
+        with open(os.devnull, 'w') as f:
+            sys.stdout = f
+            module = __import__(module_name, {}, {}, [])
 
-config = create_config(options.mc)
+        psets[key] = module
+        del sys.modules[module_name]
+        return module
+    finally:
+        sys.stdout = old_stdout
+        print("Done.")
+        lock.release()
+        sys.path[:] = old_path # restore
+        sys.argv[:] = old_argv
 
-def submit(dataset, opt):
-    c = copy.deepcopy(config)
+def submit(job):
+    module = loadPSet(job['pset'], job['on_mc'])
 
-    c.JobType.psetName = options.psetName
-    c.JobType.outputFiles.append(options.outputFile)
+    c = copy.deepcopy(job['crab_config'])
+
+    c.JobType.psetName = job['pset']
+    c.JobType.outputFiles.append(module.process.framework.output.value())
 
     if hasattr(module.process, 'gridin') and hasattr(module.process.gridin, 'input_files') and len(module.process.gridin.input_files) > 0:
         if not hasattr(c.JobType, 'inputFiles'):
@@ -104,15 +126,15 @@ def submit(dataset, opt):
 
         c.JobType.inputFiles += module.process.gridin.input_files
 
-    c.General.requestName = opt['name']
-    c.Data.outputDatasetTag = opt['name']
+    c.General.requestName = job['metadata']['name']
+    c.Data.outputDatasetTag = job['metadata']['name']
 
-    c.Data.inputDataset = dataset
+    c.Data.inputDataset = job['dataset']
 
     try:
-        splittingType, splittingValueStr = options.splitting.split(":")
+        splittingType, splittingValueStr = job['splitting'].split(":")
         if splittingType == "relative":
-            c.Data.unitsPerJob = int(round(float(splittingValueStr)*opt['units_per_job']))
+            c.Data.unitsPerJob = int(round(float(splittingValueStr) * job['metadata']['units_per_job']))
         elif splittingType == "absolute":
             c.Data.unitsPerJob = int(splittingValueStr)
         else:
@@ -120,45 +142,147 @@ def submit(dataset, opt):
     except:
         raise Exception("Cannot parse splitting setting '{0}', should take the form of 'relative:float' or 'absolute:int'".format(options.splitting))
 
-    pyCfgParams = []
+    pyCfgParams = [str('runOnData=%d' % (0 if job['on_mc'] else 1))]
 
-    era = opt['era']
+    era = job['metadata']['era']
     assert era == '25ns' or era == '50ns'
     pyCfgParams += [str('era=%s' % era)]
 
-    if 'globalTag' in opt:
-        pyCfgParams += [str('globalTag=%s' % opt['globalTag'])]
+    if 'globalTag' in job['metadata']:
+        pyCfgParams += [str('globalTag=%s' % job['metadata']['globalTag'])]
 
     # Fix process name for PromptReco, which is RECO instead of PAT
-    if options.data and 'PromptReco' in dataset:
+    if not job['on_mc'] and 'PromptReco' in dataset:
         pyCfgParams += [str('process=RECO')]
 
     c.JobType.pyCfgParams = pyCfgParams
 
-    print("Submitting new task %r" % opt['name'])
+    print("Submitting new task %r" % c.General.requestName)
     print("\tDataset: %s" % dataset)
 
-    if options.data:
-        c.Data.runRange = '%d-%d' % (opt['run_range'][0], opt['run_range'][1])
-        if not 'certified_lumi_file' in opt and not options.lumi_mask:
-            raise Exception('You are running on data but no luminosity mask is specified for task %r. Please add the \'--lumi-mask\' argument or use the \'certified_lumi_file\' key inside the JSON file' % (opt['name']))
+    if not job['on_mc']:
+        c.Data.runRange = '%d-%d' % (job['metadata']['run_range'][0], job['metadata']['run_range'][1])
+        if not 'certified_lumi_file' in job['metadata'] and not options.lumi_mask:
+            raise Exception('You are running on data but no luminosity mask is specified for task %r. Please add the \'--lumi-mask\' argument or use the \'certified_lumi_file\' key inside the JSON file' % (c.General.requestName))
 
-        c.Data.lumiMask = options.lumi_mask if options.lumi_mask else opt['certified_lumi_file']
+        c.Data.lumiMask = options.lumi_mask if options.lumi_mask else job['metadata']['certified_lumi_file']
 
     # Create output file in case something goes wrong with submit
-    crab_config_file = 'crab_' + opt['name'] + '.py'
+    crab_config_file = 'crab_' + job['analysis'] + '_' + c.General.requestName + '.py'
     with open(crab_config_file, 'w') as f:
         f.write(str(c))
 
     if options.submit:
         subprocess.call(['crab', 'submit', crab_config_file])
     else:
-        print('Configuration file saved as %r' % ('crab_' + opt['name'] + '.py'))
+        print('Configuration file saved as %r' % (crab_config_file))
 
-def submit_wrapper(args):
-    submit(*args)
+options = get_options()
 
-from multiprocessing import Pool
+analyses = {}
+for j in options.analyses:
+    with open(j) as f:
+        data = json.load(f)
+        analyses[data["name"]] = data
+
+# Load all known datasets
+import glob
+datasets = {}
+for dataset in glob.glob(os.path.join(DATASETS_ROOT, "datasets", "*.json")):
+    with open(dataset) as f:
+        datasets.update(json.load(f))
+
+crab_config_cache = {}
+for name, analysis in analyses.items():
+
+    def globMatch(value, pattern):
+        import fnmatch
+        return fnmatch.fnmatch(value, pattern)
+
+    def globIn(value, patterns):
+        """
+        Test if 'value' is matched by any pattern in 'patterns'
+        """
+        for pattern in patterns:
+            if globMatch(value, pattern):
+                return True
+
+        return False
+
+    if not 'splitting' in analysis:
+        analysis['splitting'] = 'relative:1'
+
+    # Filter groups if requested
+    if options.filter:
+        def filterGroups(groups):
+            result = []
+            for group in groups:
+                if globMatch(group, options.filter):
+                    result.append(group)
+
+            return result
+
+        analysis['samples']['mc'] = filterGroups(analysis['samples']['mc'])
+        analysis['samples']['data'] = filterGroups(analysis['samples']['data'])
+
+    # Create jobs
+    jobs = []
+
+    matched_group = []
+
+    for group, group_samples in datasets.items():
+        data = globIn(group, analysis["samples"]["data"])
+        mc = globIn(group, analysis["samples"]["mc"])
+
+        if not data and not mc:
+            continue
+
+        if options.only_mc and not mc:
+            continue
+
+        if options.only_data and not data:
+            continue
+
+        matched_group.append(group)
+
+        if mc in crab_config_cache:
+            c = crab_config_cache[mc]
+        else:
+            c = create_config(mc)
+            crab_config_cache[mc] = c
+
+        pset = findPSet(analysis['configuration'].replace('%TYPE%', 'MC' if mc else 'Data'))
+        loadPSet(pset, mc)
+
+        for dataset, metadata in group_samples.items():
+
+            job = {
+                    'analysis': name,
+                    'splitting': analysis['splitting'],
+                    'on_mc': mc,
+                    'pset': pset,
+                    'dataset': dataset,
+                    'metadata': metadata,
+                    'crab_config': c
+                    }
+
+            jobs.append(job)
+
+    def ensureGroup(type):
+        for sample in analysis["samples"][type]:
+            found = False
+            for group in matched_group:
+                if globMatch(group, sample):
+                    found = True
+            if not found:
+                raise Exception("Sample group %r requested for %s in analysis %r not found in the list of datasets." % (str(sample), type, str(name)))
+
+    if not options.only_mc:
+        ensureGroup("data")
+
+    if not options.only_data:
+        ensureGroup("mc")
+
 pool = Pool(processes=options.processes)
-pool.map(submit_wrapper, datasets.items())
+pool.map(submit, jobs)
 
