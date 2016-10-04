@@ -155,6 +155,10 @@ def submit(job):
     if not job['on_mc'] and 'PromptReco' in dataset:
         pyCfgParams += [str('process=RECO')]
 
+    # Fix hlt process name for some (signal) 80X samples, which is HLT2 instead of HLT
+    if job['on_mc'] and 'reHLT_80X' in dataset:
+        pyCfgParams += [str('hltProcessName=HLT2')]
+
     c.JobType.pyCfgParams = pyCfgParams
 
     print("Submitting new task %r" % c.General.requestName)
