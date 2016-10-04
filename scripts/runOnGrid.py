@@ -152,17 +152,17 @@ def submit(job):
         pyCfgParams += [str('globalTag=%s' % job['metadata']['globalTag'])]
 
     # Fix process name for PromptReco, which is RECO instead of PAT
-    if not job['on_mc'] and 'PromptReco' in dataset:
+    if not job['on_mc'] and 'PromptReco' in job['dataset']:
         pyCfgParams += [str('process=RECO')]
 
     # Fix hlt process name for some (signal) 80X samples, which is HLT2 instead of HLT
-    if job['on_mc'] and 'reHLT_80X' in dataset:
+    if job['on_mc'] and 'reHLT_80X' in job['dataset']:
         pyCfgParams += [str('hltProcessName=HLT2')]
 
     c.JobType.pyCfgParams = pyCfgParams
 
     print("Submitting new task %r" % c.General.requestName)
-    print("\tDataset: %s" % dataset)
+    print("\tDataset: %s" % job['dataset'])
 
     if not job['on_mc']:
         c.Data.runRange = '%d-%d' % (job['metadata']['run_range'][0], job['metadata']['run_range'][1])

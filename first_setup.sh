@@ -27,5 +27,6 @@ git remote add AlexandreMertens https://github.com/AlexandreMertens/GridIn.git
 
 pushd ${CMSSW_BASE}/src/cp3_llbb/GridIn/test > /dev/null
 ln -s -d ${CMSSW_BASE}/src/cp3_llbb/Datasets/datasets datasets
+ln -s -d ${CMSSW_BASE}/src/cp3_llbb/Datasets/analyses analyses
 popd > /dev/null
 popd > /dev/null

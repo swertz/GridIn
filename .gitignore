@@ -59,6 +59,7 @@ target/
 
 # CRAB3 stuff
 test/crab_*.py
+test/analyses
 test/datasets
 test/tasks
 
