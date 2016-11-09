@@ -43,8 +43,12 @@ def get_options():
     group.add_argument('--only-mc', action='store_true', dest='only_mc', help='Only run over MC datasets',)
     group.add_argument('--only-data', action='store_true', dest='only_data', help='Only run over data datasets')
 
-    parser.add_argument('-f', '--filter', type=str, required=False, dest='filter', metavar='FILTER',
-                        help='If specified, only keep sample groups matching this filter. Glob syntax is supported')
+    parser.add_argument('-f', '--filter', type=str, required=False, dest='filters', metavar='FILTER', action='append',
+                        help='If specified, only keep sample groups matching this filter. Glob syntax is supported. If specified more than once, only sample groups matching at least one filter will be kept')
+
+
+    parser.add_argument('-s', '--suffix', type=str, required=False, dest='suffix', metavar='SUFFIX',
+                        help='Suffix to append to dataset name')
 
     parser.add_argument('analyses', type=str, nargs='+', metavar='FILE',
                         help='List of JSON file describing the analysis.')
@@ -126,8 +130,12 @@ def submit(job):
 
         c.JobType.inputFiles += module.process.gridin.input_files
 
-    c.General.requestName = job['metadata']['name']
-    c.Data.outputDatasetTag = job['metadata']['name']
+    name = job['metadata']['name']
+    if (options.suffix):
+        name += '_' + options.suffix
+
+    c.General.requestName = name
+    c.Data.outputDatasetTag = name
 
     c.Data.inputDataset = job['dataset']
 
@@ -216,13 +224,30 @@ for name, analysis in analyses.items():
     if not 'splitting' in analysis:
         analysis['splitting'] = 'relative:1'
 
+    # Expand groups
+    data_groups = []
+    mc_groups = []
+    def expandGroups(groups):
+        result = []
+        for glob in groups:
+            for group, group_samples in datasets.items():
+                if globMatch(group, glob):
+                    result.append(group)
+
+        return result
+
+    analysis["samples"]["data"] = expandGroups(analysis["samples"]["data"])
+    analysis["samples"]["mc"] = expandGroups(analysis["samples"]["mc"])
+
     # Filter groups if requested
-    if options.filter:
+    if options.filters and len(options.filters) > 0:
         def filterGroups(groups):
             result = []
             for group in groups:
-                if globMatch(group, options.filter):
-                    result.append(group)
+                for filter in options.filters:
+                    if globMatch(group, filter):
+                        result.append(group)
+                        break
 
             return result
 
@@ -235,8 +260,8 @@ for name, analysis in analyses.items():
     matched_group = []
 
     for group, group_samples in datasets.items():
-        data = globIn(group, analysis["samples"]["data"])
-        mc = globIn(group, analysis["samples"]["mc"])
+        data = group in analysis["samples"]["data"]
+        mc = group in analysis["samples"]["mc"]
 
         if not data and not mc:
             continue
