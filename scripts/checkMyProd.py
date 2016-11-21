@@ -71,8 +71,8 @@ def main():
     outjson = options.outjson
     if options.new:
         # NB: assumes all the on-going tasks are for the same analyzer
-        module = runPostCrab.load_file(alltasks[0] + '.py')
-        psetName = module.config.JobType.psetName
+        module = runPostCrab.load_request('tasks/' + alltasks[0])
+        psetName = module['OriginalConfig'].JobType.psetName
         print "##### Figure out the code(s) version"
         # first the version of the framework
         FWHash, FWRepo, FWUrl = runPostCrab.getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
