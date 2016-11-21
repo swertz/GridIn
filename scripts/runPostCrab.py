@@ -15,7 +15,7 @@ from pwd import getpwuid
 # import SAMADhi stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
 SCRAM_ARCH = os.environ['SCRAM_ARCH']
-sys.path.append(os.path.join(CMSSW_BASE,'bin', SCRAM_ARCH))
+sys.path.append(os.path.join(CMSSW_BASE, 'bin', SCRAM_ARCH))
 
 # Add default ingrid storm package
 sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/site-packages/storm-0.20-py2.7-linux-x86_64.egg')
@@ -93,22 +93,19 @@ def get_options():
     Parse and return the arguments provided by the user.
     """
     parser = argparse.ArgumentParser(description='Gather the information on a processed sample and insert the information in SAMADhi')
-    parser.add_argument('CrabConfig', type=str, metavar='FILE',
-                        help='CRAB3 configuration file (including .py extension).')
+    parser.add_argument('CrabFolder', type=str, metavar='DIR',
+                        help='Crab task folder')
     parser.add_argument('--debug', action='store_true', help='More verbose output', dest='debug')
     options = parser.parse_args()
     return options
 
-def load_file(filename):
-    directory, module_name = os.path.split(filename)
-    module_name = os.path.splitext(module_name)[0]
-    path = list(sys.path)
-    sys.path.insert(0, directory)
-    try:
-        module = __import__(module_name)
-    finally:
-        sys.path[:] = path # restore
-    return module
+def load_request(folder):
+    import pickle
+
+    cache = os.path.join(folder, '.requestcache')
+    with open(cache) as f:
+        cache = pickle.load(f)
+        return cache
 
 def get_dataset(inputDataset):
     dbstore = DbStore()
@@ -223,12 +220,15 @@ def main():
     else:
         storagePrefix = "root://cms-xrd-global.cern.ch/"
 
-    print "##### Get information out of the crab config file (work area, dataset, pset)"
-    module = load_file(options.CrabConfig)
-    workArea = module.config.General.workArea
-    requestName = module.config.General.requestName
-    psetName = module.config.JobType.psetName
-    inputDataset = unicode(module.config.Data.inputDataset)
+    print "##### Get crab task information"
+
+    crab_request = load_request(options.CrabFolder)
+    config = crab_request['OriginalConfig']
+
+    workArea = config.General.workArea
+    requestName = config.General.requestName
+    psetName = config.JobType.psetName
+    inputDataset = unicode(config.Data.inputDataset)
     print "done"
 
     print("")
@@ -255,15 +255,16 @@ def main():
     # Since the API outputs AND prints the same data, hide whatever is printed on screen
     saved_stdout, saved_stderr = sys.stdout, sys.stderr
     if not options.debug:
-        sys.stdout = sys.stderr = open(os.devnull, "w")
-    taskdir = os.path.join(workArea, 'crab_' + requestName)
+        sys.stdout = open(os.devnull, "w")
+
+    taskdir = options.CrabFolder
     # list output
     output_files = crabCommand('getoutput', '--dump', dir = taskdir )
     # get crab report
     report = crabCommand('report', dir = taskdir )
     # restore print to stdout 
     if not options.debug:
-        sys.stdout, sys.stderr = saved_stdout, saved_stderr
+        sys.stdout = saved_stdout
 #    print "log_files=", log_files
 #    print "output_files=", output_files
 #    print "report=", report
@@ -316,7 +317,7 @@ def main():
 
     print "##### Check if the job processed the whole sample"
     has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
-    is_data = (module.config.Data.splitting == 'LumiBased')
+    is_data = (config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
     else:

@@ -169,6 +169,10 @@ def submit(job):
 
     c.JobType.pyCfgParams = pyCfgParams
 
+    # Some jobs may request more memory
+    if 'memory' in job['metadata']:
+        c.JobType.maxMemoryMB = job['metadata']['memory']
+
     print("Submitting new task %r" % c.General.requestName)
     print("\tDataset: %s" % job['dataset'])
 
