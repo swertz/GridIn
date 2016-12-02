@@ -5,6 +5,7 @@ import sys
 import glob
 import json
 import argparse
+import re
 
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
@@ -97,7 +98,7 @@ def main():
         for t in data[u'COMPLETED']:
             if t in data[u'GRIDIN-INDB']:
                 continue
-            s = str(t).strip('crab_') + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
+            s = re.sub('crab_', '', str(t)) + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
             s_id = get_sample(unicode(s))
             if len(s_id) > 0:
                 data['GRIDIN-INDB'].append(t)
