@@ -138,15 +138,19 @@ def main():
     #    * SUBMITFAILED -> suggest to rm -r the task and submit again
     #####
     print "##### ##### Suggested actions ##### #####"
-    if len(tasks['COMPLETED']) + len(tasks['SUBMITFAILED']) > 0:
+    if len(tasks['COMPLETED']) + len(tasks['SUBMITFAILED']) + len(tasks['FAILED']) > 0:
         if len(tasks['COMPLETED']) > 0:
             print "##### COMPLETED tasks #####"
             for task in tasks['COMPLETED']:
-                print "runPostCrab.py", task + ".py"
+                print "runPostCrab.py tasks/" + task
         if len(tasks['SUBMITFAILED']) > 0:
             print "##### SUBMITFAILED tasks #####"
             for task in tasks['SUBMITFAILED']:
                 print "rm -r tasks/" + task + "; crab submit " + task + ".py"
+        if len(tasks['FAILED']) > 0:
+            print "##### FAILED tasks #####"
+            for task in tasks['FAILED']:
+                print "crab resubmit tasks/" + task
     else:
         print "None"
 
