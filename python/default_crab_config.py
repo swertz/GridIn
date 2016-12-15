@@ -17,6 +17,7 @@ def create_config(is_mc):
     config.JobType.disableAutomaticOutputCollection = True
     config.JobType.outputFiles = []
     config.JobType.allowUndistributedCMSSW = True
+    config.JobType.sendExternalFolder = True # To send electron MVA ids with jobs
 
     config.Data.inputDBS = 'global'
 
