@@ -32,6 +32,29 @@ import ROOT
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 ROOT.gROOT.Reset()
 
+# Print iterations progress
+def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=40):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        bar_length  - Optional  : character length of bar (Int)
+    """
+    str_format = "{0:." + str(decimals) + "f}"
+    percents = str_format.format(100 * (iteration / float(total)))
+    filled_length = int(round(bar_length * iteration / float(total)))
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+
+    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+
+    if iteration == total:
+        sys.stdout.write('\n')
+    sys.stdout.flush()
+
 def get_file_data(pfn):
     """
     Return the sum of event weights and the entries of the framework output
@@ -272,7 +295,7 @@ def main():
 
     print("")
 
-    print "##### Get information from the output files"
+    print "##### Get information from the output files (%d files)" % (len(output_files['lfn']))
     files = []
     for (i, lfn) in enumerate(output_files['lfn']):
         pfn = output_files['pfn'][i]
@@ -289,8 +312,10 @@ def main():
     dataset_extras_sumw = {}
     dataset_nselected = 0
     file_missing = False
-    for f in files:
+    print_progress(0, len(files), prefix='Progress:')
+    for i, f in enumerate(files):
         (sumw, extras_sumw, entries) = get_file_data(storagePrefix + f['lfn'])
+        print_progress(i + 1, len(files), prefix='Progress:')
         if not sumw:
             print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
             file_missing = True
