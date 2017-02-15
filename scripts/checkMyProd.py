@@ -6,9 +6,11 @@ import glob
 import json
 import argparse
 import re
+import httplib
 
 # import CRAB3 stuff
 from CRABAPI.RawCommand import crabCommand
+import CRABClient
 
 # import CMSSW stuff
 CMSSW_BASE = os.environ['CMSSW_BASE']
@@ -38,6 +40,23 @@ def get_options():
                         help='json file storing the status of your on-going production') 
     options = parser.parse_args()
     return options
+
+def retry(nattempts, exception=None):
+    def tryIt(func):
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < nattempts - 1:
+                try:
+                    return func(*args, **kwargs)
+                except (exception if exception is not None else Exception):
+                    attempts += 1
+            return func(*args, **kwargs)
+        return wrapper
+    return tryIt
+
+@retry(5, httplib.HTTPException)
+def send_crab_command(*args, **kwargs):
+    return crabCommand(*args, **kwargs)
 
 def main():
     #####
@@ -114,7 +133,15 @@ def main():
         taskdir = os.path.join('tasks/', task)
         print ""
         print "#####", task, "#####"
-        status = crabCommand('status', dir = taskdir)
+        try:
+            status = send_crab_command('status', dir = taskdir)
+        except CRABClient.ClientExceptions.CachefileNotFoundException:
+            print("Something went wrong: directory {} was not properly created. Will count it as 'SUBMITFAILED'...\n".format(taskdir))
+            tasks['SUBMITFAILED'].append(task)
+            continue
+        #except httplib.HTTPException:
+        #    print("HTTP error when requesting status for task {}. Trying again.\n".format(taskdir))
+        #    status = crabCommand('status', dir = taskdir)
     # {'status': 'COMPLETED', 'schedd': 'crab3-3@submit-4.t2.ucsd.edu', 'saveLogs': 'T', 'jobsPerStatus': {'finished': 1}, 'jobs': {'1': {'State': 'finished'}}, 'publication': {'disabled': []}, 'taskWarningMsg': [], 'publicationFailures': {}, 'outdatasets': None, 'statusFailureMsg': '', 'taskFailureMsg': '', 'failedJobdefs': 0, 'ASOURL': 'https://cmsweb.cern.ch/couchdb', 'totalJobdefs': 0, 'jobSetID': '151022_173830:obondu_crab_HWminusJ_HToWW_M125_13TeV_powheg_pythia8_MiniAODv2', 'jobdefErrors': [], 'collector': 'cmssrv221.fnal.gov,vocms099.cern.ch', 'jobList': [['finished', 1]]}
 
         status_code = status['status']
