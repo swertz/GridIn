@@ -54,6 +54,7 @@ def main():
     tasks['RESUBMITFAILED'] = []
     tasks['NEW'] = []
     tasks['SUBMITTED'] = []
+    tasks['TORESUBMIT'] = []
     tasks['UNKNOWN'] = []
     tasks['QUEUED'] = []
     tasks['FAILED'] = []
@@ -115,7 +116,11 @@ def main():
         print "#####", task, "#####"
         status = crabCommand('status', dir = taskdir)
     # {'status': 'COMPLETED', 'schedd': 'crab3-3@submit-4.t2.ucsd.edu', 'saveLogs': 'T', 'jobsPerStatus': {'finished': 1}, 'jobs': {'1': {'State': 'finished'}}, 'publication': {'disabled': []}, 'taskWarningMsg': [], 'publicationFailures': {}, 'outdatasets': None, 'statusFailureMsg': '', 'taskFailureMsg': '', 'failedJobdefs': 0, 'ASOURL': 'https://cmsweb.cern.ch/couchdb', 'totalJobdefs': 0, 'jobSetID': '151022_173830:obondu_crab_HWminusJ_HToWW_M125_13TeV_powheg_pythia8_MiniAODv2', 'jobdefErrors': [], 'collector': 'cmssrv221.fnal.gov,vocms099.cern.ch', 'jobList': [['finished', 1]]}
-        tasks[status['status']].append(task)
+
+        status_code = status['status']
+        if 'failed' in status['jobsPerStatus']:
+            status_code = 'TORESUBMIT'
+        tasks[status_code].append(task)
     
     #####
     # Dump the crab status into the output json file
@@ -139,21 +144,22 @@ def main():
     #    * SUBMITFAILED -> suggest to rm -r the task and submit again
     #####
     print "##### ##### Suggested actions ##### #####"
-    if len(tasks['COMPLETED']) + len(tasks['SUBMITFAILED']) + len(tasks['FAILED']) > 0:
-        if len(tasks['COMPLETED']) > 0:
-            print "##### COMPLETED tasks #####"
-            for task in tasks['COMPLETED']:
-                print "runPostCrab.py tasks/" + task
-        if len(tasks['SUBMITFAILED']) > 0:
-            print "##### SUBMITFAILED tasks #####"
-            for task in tasks['SUBMITFAILED']:
-                print "rm -r tasks/" + task + "; crab submit " + task + ".py"
-        if len(tasks['FAILED']) > 0:
-            print "##### FAILED tasks #####"
-            for task in tasks['FAILED']:
-                print "crab resubmit tasks/" + task
-    else:
-        print "None"
+    if len(tasks['COMPLETED']) > 0:
+        print "##### COMPLETED tasks #####"
+        for task in tasks['COMPLETED']:
+            print "runPostCrab.py tasks/" + task
+    if len(tasks['SUBMITFAILED']) > 0:
+        print "##### SUBMITFAILED tasks #####"
+        for task in tasks['SUBMITFAILED']:
+            print "rm -r tasks/" + task + "; crab submit " + task + ".py"
+    if len(tasks['FAILED']) > 0:
+        print "##### FAILED tasks #####"
+        for task in tasks['FAILED']:
+            print "crab resubmit tasks/" + task
+    if len(tasks['TORESUBMIT']) > 0:
+        print "##### TORESUBMIT tasks #####"
+        for task in tasks['TORESUBMIT']:
+            print "crab resubmit tasks/" + task + " --siteblacklist=T2_UK_SGrid_RALPP"
 
 if __name__ == '__main__':
     main()

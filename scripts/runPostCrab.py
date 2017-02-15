@@ -59,15 +59,18 @@ def get_file_data(pfn):
     """
     Return the sum of event weights and the entries of the framework output
     """
+    if not os.path.isfile(pfn):
+        raise IOError('The output file %r is missing on the disk. You need to relaunch the associated job.' % pfn)
+
     f = ROOT.TFile.Open(pfn)
     if not f:
-        return (None, None)
+        raise IOError('The output file %r is missing on the disk or is corrupted. You need to relaunch the associated job.' % pfn)
 
     nominal_sumw = f.Get("event_weight_sum")
     if nominal_sumw:
         nominal_sumw = nominal_sumw.GetVal()
     else:
-        nominal_sumw = None
+        raise IOError('Output file %r is corrupted. "event_weight_sum" is missing.' % pfn)
 
     # Grab extras sum of event weight
     extras_sumw = {}
@@ -82,6 +85,8 @@ def get_file_data(pfn):
     tree = f.Get("t")
     if tree:
         entries = tree.GetEntriesFast()
+    else:
+        raise IOError('Output file %r is corrupted. Tree is missing.' % pfn)
 
     return (nominal_sumw, extras_sumw, entries)
 
@@ -316,17 +321,9 @@ def main():
     for i, f in enumerate(files):
         (sumw, extras_sumw, entries) = get_file_data(storagePrefix + f['lfn'])
         print_progress(i + 1, len(files), prefix='Progress:')
-        if not sumw:
-            print("Warning: failed to retrieve sum of event weight for %r" % f['lfn'])
-            file_missing = True
-            continue
 
         dataset_sumw += sumw
         dataset_extras_sumw = sum_dicts(dataset_extras_sumw, extras_sumw)
-
-        if not entries:
-            print("Warning: failed to retrieve number of entries for %r" % f['lfn'])
-
         dataset_nselected += entries
 
         # Convert python dict to json
@@ -341,7 +338,12 @@ def main():
     print("")
 
     print "##### Check if the job processed the whole sample"
-    has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
+    if 'numEventsRead' not in report:
+        print("Warning: crab report is incomplete, it's not possible to check if the job processed everything.")
+        has_job_processed_everything = True
+    else:
+        has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
+
     is_data = (config.Data.splitting == 'LumiBased')
     if has_job_processed_everything:
         print "done"
@@ -386,7 +388,7 @@ def main():
     # dataset_nselected
     # localpath
     NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-    add_sample(NAME, folder, "NTUPLES", report['numEventsRead'], dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
+    add_sample(NAME, folder, "NTUPLES", dataset_nevents, dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
 
 if __name__ == '__main__':
     main() 

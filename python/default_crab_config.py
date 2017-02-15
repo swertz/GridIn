@@ -20,6 +20,7 @@ def create_config(is_mc):
     config.JobType.sendExternalFolder = True # To send electron MVA ids with jobs
 
     config.Data.inputDBS = 'global'
+    config.Data.allowNonValidInputDataset = True
 
     if is_mc:
         config.Data.splitting = 'FileBased'
