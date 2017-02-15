@@ -87,7 +87,11 @@ def main(crabUsername, ingridUsername):
             for taskStamp in listdir(join(storageDir, d, subd)):
                 if not isdir(join(storageDir, d, subd, taskStamp)):
                     continue
-                ttask = int(taskStamp.replace('_', ''))
+                try:
+                    ttask = int(taskStamp.replace('_', ''))
+                except ValueError:
+                    print("Warning: could not interpret path {}, skipping it...".format(taskStamp))
+                    continue
                 if ttask >= tcut:
                     continue
                 for taskID in listdir(join(storageDir, d, subd, taskStamp)):
@@ -97,7 +101,11 @@ def main(crabUsername, ingridUsername):
                     if myPath in list_allDBsamples:
                         continue
 #                    print isFramework(myPath), myPath
-                    mySize = subprocess.check_output(["du", '-s', myPath]).split()[0].decode('utf-8')
+                    try:
+                        mySize = subprocess.check_output(["du", '-s', myPath]).split()[0].decode('utf-8')
+                    except subprocess.CalledProcessError:
+                        print("Error while accessing file in path {}, skipping it!".format(myPath))
+                        continue
                     list_allUserDirs[ttask] = {'path': myPath, 'size': int(mySize) * 1024, 'is CP3-llbb': isFramework(myPath)}
 
     print '# Tasks older than 6 months'
