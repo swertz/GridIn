@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import os
 import sys
@@ -6,10 +7,8 @@ import glob
 import json
 import argparse
 import re
-import httplib
 
 # import CRAB3 stuff
-from CRABAPI.RawCommand import crabCommand
 import CRABClient
 
 # import CMSSW stuff
@@ -23,7 +22,8 @@ sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/sit
 
 # import SAMADhi stuff
 from SAMADhi import Dataset, Sample, File, DbStore
-import runPostCrab
+
+from cp3_llbb.GridIn import utils
 
 def get_sample(sample):
     dbstore = DbStore()
@@ -40,23 +40,6 @@ def get_options():
                         help='json file storing the status of your on-going production') 
     options = parser.parse_args()
     return options
-
-def retry(nattempts, exception=None):
-    def tryIt(func):
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < nattempts - 1:
-                try:
-                    return func(*args, **kwargs)
-                except (exception if exception is not None else Exception):
-                    attempts += 1
-            return func(*args, **kwargs)
-        return wrapper
-    return tryIt
-
-@retry(5, httplib.HTTPException)
-def send_crab_command(*args, **kwargs):
-    return crabCommand(*args, **kwargs)
 
 def main():
     #####
@@ -92,13 +75,13 @@ def main():
     outjson = options.outjson
     if options.new:
         # NB: assumes all the on-going tasks are for the same analyzer
-        module = runPostCrab.load_request('tasks/' + alltasks[0])
+        module = utils.load_request('tasks/' + alltasks[0])
         psetName = module['OriginalConfig'].JobType.psetName
         print "##### Figure out the code(s) version"
         # first the version of the framework
-        FWHash, FWRepo, FWUrl = runPostCrab.getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
+        FWHash, FWRepo, FWUrl = utils.getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
         # then the version of the analyzer
-        AnaHash, AnaRepo, AnaUrl = runPostCrab.getGitTagRepoUrl( os.path.dirname( psetName ) )
+        AnaHash, AnaRepo, AnaUrl = utils.getGitTagRepoUrl( os.path.dirname( psetName ) )
         outjson = 'prod_' + FWHash + '_' + AnaRepo + '_' + AnaHash + '.json'
         print "The output json will be:", outjson
     else:
@@ -134,7 +117,7 @@ def main():
         print ""
         print "#####", task, "#####"
         try:
-            status = send_crab_command('status', dir = taskdir)
+            status = utils.send_crab_command('status', dir = taskdir)
         except CRABClient.ClientExceptions.CachefileNotFoundException:
             print("Something went wrong: directory {} was not properly created. Will count it as 'SUBMITFAILED'...\n".format(taskdir))
             tasks['SUBMITFAILED'].append(task)
@@ -186,7 +169,7 @@ def main():
     if len(tasks['TORESUBMIT']) > 0:
         print "##### TORESUBMIT tasks #####"
         for task in tasks['TORESUBMIT']:
-            print "crab resubmit tasks/" + task + " --siteblacklist=T2_UK_SGrid_RALPP"
+            print "crab resubmit tasks/" + task + " --siteblacklist=T2_UK_SGrid_RALPP,T1_US_FNAL"
 
 if __name__ == '__main__':
     main()

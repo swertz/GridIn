@@ -6,9 +6,6 @@ from __future__ import division
 import argparse
 import os
 import sys
-import subprocess
-import tarfile
-import contextlib
 import json
 from pwd import getpwuid
 
@@ -24,36 +21,12 @@ sys.path.append('/nfs/soft/python/python-2.7.5-sl6_amd64_gcc44/lib/python2.7/sit
 from SAMADhi import Dataset, Sample, File, DbStore
 import das_import
 
-# import CRAB3 stuff
-from CRABAPI.RawCommand import crabCommand
-
 # import a bit of ROOT
 import ROOT
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 ROOT.gROOT.Reset()
 
-# Print iterations progress
-def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=40):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        bar_length  - Optional  : character length of bar (Int)
-    """
-    str_format = "{0:." + str(decimals) + "f}"
-    percents = str_format.format(100 * (iteration / float(total)))
-    filled_length = int(round(bar_length * iteration / float(total)))
-    bar = '█' * filled_length + '-' * (bar_length - filled_length)
-
-    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
-
-    if iteration == total:
-        sys.stdout.write('\n')
-    sys.stdout.flush()
+from cp3_llbb.GridIn import utils
 
 def get_file_data(pfn):
     """
@@ -90,90 +63,22 @@ def get_file_data(pfn):
 
     return (nominal_sumw, extras_sumw, entries)
 
-def sum_dicts(a, b):
-    """
-    Sum each value of the dicts a et b and return a new dict
-    """
-
-    if len(a) == 0 and len(b) == 0:
-        return {}
-
-    if len(a) == 0:
-        for key in b.viewkeys():
-            a[key] = 0
-
-    if len(b) == 0:
-        for key in a.viewkeys():
-            b[key] = 0
-
-    if a.viewkeys() != b.viewkeys():
-        print("Warning: files content are different. This is not a good sign, something really strange happened!")
-        return None
-
-    r = {}
-    for key in a.viewkeys():
-        r[key] = a[key] + b[key]
-
-    return r
-
 def get_options():
     """
     Parse and return the arguments provided by the user.
     """
     parser = argparse.ArgumentParser(description='Gather the information on a processed sample and insert the information in SAMADhi')
-    parser.add_argument('CrabFolder', type=str, metavar='DIR',
+    parser.add_argument('CrabFolder', type=str, nargs='+', metavar='DIR',
                         help='Crab task folder')
     parser.add_argument('--debug', action='store_true', help='More verbose output', dest='debug')
     options = parser.parse_args()
     return options
-
-def load_request(folder):
-    import pickle
-
-    cache = os.path.join(folder, '.requestcache')
-    with open(cache) as f:
-        cache = pickle.load(f)
-        return cache
 
 def get_dataset(inputDataset):
     dbstore = DbStore()
     resultset = dbstore.find(Dataset, Dataset.name==inputDataset)
     return list(resultset.values(Dataset.name, Dataset.dataset_id, Dataset.nevents))
 
-def getGitTagRepoUrl(gitCallPath):
-    # get the stuff needed to write a valid url: name on github, name of repo, for both origin and upstream
-    proc = subprocess.Popen(['git', 'remote', 'show', 'origin'], cwd = gitCallPath, stdout=subprocess.PIPE)
-    remoteOrigin = proc.stdout.read()
-    remoteOrigin = [x.split(':')[-1].split('/') for x in remoteOrigin.split('\n') if 'Fetch URL' in x]
-    remoteOrigin, repoOrigin = remoteOrigin[0]
-    repoOrigin = repoOrigin.strip('.git')
-    proc = subprocess.Popen(['git', 'remote', 'show', 'upstream'], cwd = gitCallPath, stdout=subprocess.PIPE)
-    remoteUpstream = proc.stdout.read()
-    remoteUpstream = [x.split(':')[-1].split('/') for x in remoteUpstream.split('\n') if 'Fetch URL' in x]
-    remoteUpstream, repoUpstream = remoteUpstream[0]
-    repoUpstream = repoUpstream.strip('.git')
-    # get the hash of the commit
-    # Well, note that actually it should be the tag if a tag exist, the hash is the fallback solution
-    proc = subprocess.Popen(['git', 'describe', '--tags', '--always', '--dirty'], cwd = gitCallPath, stdout=subprocess.PIPE)
-    gitHash = proc.stdout.read().strip('\n')
-    if( 'dirty' in gitHash ):
-        raise AssertionError("Aborting: your working tree for repository", repoOrigin, "is dirty, please clean the changes not staged/committed before inserting this in the database") 
-    # get the list of branches in which you can find the hash
-    proc = subprocess.Popen(['git', 'branch', '-r', '--contains', gitHash], cwd = gitCallPath, stdout=subprocess.PIPE)
-    branch = proc.stdout.read()
-    if( 'upstream' in branch ):
-        url = "https://github.com/" + remoteUpstream + "/" + repoUpstream + "/tree/" + gitHash
-        repo = repoUpstream
-    elif( 'origin' in branch ):
-        url = "https://github.com/" + remoteOrigin + "/" + repoOrigin + "/tree/" + gitHash
-        repo = repoOrigin
-    elif( '/' in branch ):
-        url = "https://github.com/" + branch.strip(" ").split("/")[0] + "/" + repoOrigin + "/tree/" + branch.strip(" ").split("/")[1]
-        repo = repoOrigin
-    else:
-        print "PLEASE PUSH YOUR CODE!!! this result CANNOT be reproduced / bookkept outside of your ingrid session, so there is no point into putting it in the database, ABORTING now"
-        raise AssertionError("Code from repository " + repoUpstream + " has not been pushed")
-    return gitHash, repo, url
 
 def add_sample(NAME, localpath, type, nevents, nselected, AnaUrl, FWUrl, dataset_id, sumw, extras_sumw, has_job_processed_everything, dataset_nevents, files, processed_lumi=None):
     dbstore = DbStore()
@@ -248,147 +153,147 @@ def main():
     else:
         storagePrefix = "root://cms-xrd-global.cern.ch/"
 
-    print "##### Get crab task information"
+    for taskdir in options.CrabFolder:
+        print "##### Get crab task information for task folder '{}'".format(taskdir)
 
-    crab_request = load_request(options.CrabFolder)
-    config = crab_request['OriginalConfig']
+        crab_request = utils.load_request(taskdir)
+        config = crab_request['OriginalConfig']
 
-    workArea = config.General.workArea
-    requestName = config.General.requestName
-    psetName = config.JobType.psetName
-    inputDataset = unicode(config.Data.inputDataset)
-    print "done"
-
-    print("")
-    
-    print "##### Check if the dataset exists in the database"
-    # if yes then grab its ID
-    # if not then run das_import.py to add it
-    # print inputDataset
-    values = get_dataset(inputDataset)
-    # print values
-    if( len(values) == 0 ):
-        print "Importing CMS dataset"
-        das_import.import_cms_dataset(inputDataset)
+        workArea = config.General.workArea
+        requestName = config.General.requestName
+        psetName = config.JobType.psetName
+        inputDataset = unicode(config.Data.inputDataset)
         print "done"
+
+        print("")
+        
+        print "##### Check if the dataset exists in the database"
+        # if yes then grab its ID
+        # if not then run das_import.py to add it
+        # print inputDataset
         values = get_dataset(inputDataset)
-    # if there is more than one sample then we're in trouble, crash here
-    assert( len(values) == 1 )
-    dataset_name, dataset_id, dataset_nevents = values[0]
-    print "done"
-
-    print("")
-    
-    print "##### Get info from crab (outputs, report)"
-    # Since the API outputs AND prints the same data, hide whatever is printed on screen
-    saved_stdout, saved_stderr = sys.stdout, sys.stderr
-    if not options.debug:
-        sys.stdout = open(os.devnull, "w")
-
-    taskdir = options.CrabFolder
-    # list output
-    output_files = crabCommand('getoutput', '--dump', dir = taskdir )
-    # get crab report
-    report = crabCommand('report', dir = taskdir )
-    # restore print to stdout 
-    if not options.debug:
-        sys.stdout = saved_stdout
-#    print "log_files=", log_files
-#    print "output_files=", output_files
-#    print "report=", report
-    print "done"
-
-    print("")
-
-    print "##### Get information from the output files (%d files)" % (len(output_files['lfn']))
-    files = []
-    for (i, lfn) in enumerate(output_files['lfn']):
-        pfn = output_files['pfn'][i]
-        files.append({'lfn': lfn, 'pfn': pfn})
-
-    # DEBUG
-    #files.append({'lfn': '/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root', 'pfn': 'srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root'})
-
-    folder = os.path.dirname(output_files['lfn'][0])
-    folder = storagePrefix + folder
-
-    db_files = []
-    dataset_sumw = 0
-    dataset_extras_sumw = {}
-    dataset_nselected = 0
-    file_missing = False
-    print_progress(0, len(files), prefix='Progress:')
-    for i, f in enumerate(files):
-        (sumw, extras_sumw, entries) = get_file_data(storagePrefix + f['lfn'])
-        print_progress(i + 1, len(files), prefix='Progress:')
-
-        dataset_sumw += sumw
-        dataset_extras_sumw = sum_dicts(dataset_extras_sumw, extras_sumw)
-        dataset_nselected += entries
-
-        # Convert python dict to json
-        extras_sumw_json = unicode(json.dumps(extras_sumw, separators=(',', ':')))
-
-        db_files.append(File(unicode(f['lfn']), unicode(f['pfn']), sumw, extras_sumw_json, entries))
-
-    print "∑w = %.4f" % dataset_sumw
-    print "Number of selected events: %d" % dataset_nselected
-    print "Number of output files (crab / really on the storage): %d / %d" % (len(files), len(db_files))
-
-    print("")
-
-    print "##### Check if the job processed the whole sample"
-    if 'numEventsRead' not in report:
-        print("Warning: crab report is incomplete, it's not possible to check if the job processed everything.")
-        has_job_processed_everything = True
-    else:
-        has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
-
-    is_data = (config.Data.splitting == 'LumiBased')
-    if has_job_processed_everything:
+        # print values
+        if( len(values) == 0 ):
+            print "Importing CMS dataset"
+            das_import.import_cms_dataset(inputDataset)
+            print "done"
+            values = get_dataset(inputDataset)
+        # if there is more than one sample then we're in trouble, crash here
+        assert( len(values) == 1 )
+        dataset_name, dataset_id, dataset_nevents = values[0]
         print "done"
-    else:
-        if is_data:
-            # This is data, it is expected to not run on everything given we use a lumiMask
+
+        print("")
+        
+        print "##### Get info from crab (outputs, report)"
+        # Since the API outputs AND prints the same data, hide whatever is printed on screen
+        saved_stdout, saved_stderr = sys.stdout, sys.stderr
+        if not options.debug:
+            sys.stdout = open(os.devnull, "w")
+
+        # list output
+        output_files = utils.send_crab_command('getoutput', '--dump', dir = taskdir )
+        # get crab report
+        report = utils.send_crab_command('report', dir = taskdir )
+        # restore print to stdout 
+        if not options.debug:
+            sys.stdout = saved_stdout
+    #    print "log_files=", log_files
+    #    print "output_files=", output_files
+    #    print "report=", report
+        print "done"
+
+        print("")
+
+        print "##### Get information from the output files (%d files)" % (len(output_files['lfn']))
+        files = []
+        for (i, lfn) in enumerate(output_files['lfn']):
+            pfn = output_files['pfn'][i]
+            files.append({'lfn': lfn, 'pfn': pfn})
+
+        # DEBUG
+        #files.append({'lfn': '/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root', 'pfn': 'srm://ingrid-se02.cism.ucl.ac.be:8444/srm/managerv2?SFN=/storage/data/cms/store/user/sbrochet/TTTo2L2Nu_13TeV-powheg/TTTo2L2Nu_13TeV-powheg_MiniAODv2/160210_181039/0000/output_mc_1.root'})
+
+        folder = os.path.dirname(output_files['lfn'][0])
+        folder = storagePrefix + folder
+
+        db_files = []
+        dataset_sumw = 0
+        dataset_extras_sumw = {}
+        dataset_nselected = 0
+        file_missing = False
+        utils.print_progress(0, len(files), prefix='Progress:')
+        for i, f in enumerate(files):
+            (sumw, extras_sumw, entries) = get_file_data(storagePrefix + f['lfn'])
+            utils.print_progress(i + 1, len(files), prefix='Progress:')
+
+            dataset_sumw += sumw
+            dataset_extras_sumw = utils.sum_dicts(dataset_extras_sumw, extras_sumw)
+            dataset_nselected += entries
+
+            # Convert python dict to json
+            extras_sumw_json = unicode(json.dumps(extras_sumw, separators=(',', ':')))
+
+            db_files.append(File(unicode(f['lfn']), unicode(f['pfn']), sumw, extras_sumw_json, entries))
+
+        print "∑w = %.4f" % dataset_sumw
+        print "Number of selected events: %d" % dataset_nselected
+        print "Number of output files (crab / really on the storage): %d / %d" % (len(files), len(db_files))
+
+        print("")
+
+        print "##### Check if the job processed the whole sample"
+        if 'numEventsRead' not in report:
+            print("Warning: crab report is incomplete, it's not possible to check if the job processed everything.")
+            has_job_processed_everything = True
+        else:
+            has_job_processed_everything = (dataset_nevents == report['numEventsRead']) and not file_missing
+
+        is_data = (config.Data.splitting == 'LumiBased')
+        if has_job_processed_everything:
             print "done"
         else:
-            # Warn
-            print "Warning: You are about to add in the DB a sample which has not been completely processed (%d events out of %d, %.2f%%)" % (report['numEventsRead'], dataset_nevents, report['numEventsRead'] / dataset_nevents * 100)
-            print "If you want to update this sample later on with more statistics, simply re-execute this script with the same arguments."
+            if is_data:
+                # This is data, it is expected to not run on everything given we use a lumiMask
+                print "done"
+            else:
+                # Warn
+                print "Warning: You are about to add in the DB a sample which has not been completely processed (%d events out of %d, %.2f%%)" % (report['numEventsRead'], dataset_nevents, report['numEventsRead'] / dataset_nevents * 100)
+                print "If you want to update this sample later on with more statistics, simply re-execute this script with the same arguments."
 
-    print("")
+        print("")
 
-    processed_lumi = None
-    if is_data:
-        processed_lumi = report['processedLumis']
+        processed_lumi = None
+        if is_data:
+            processed_lumi = report['processedLumis']
 
-    print "##### Figure out the code(s) version"
-    # first the version of the framework
-    FWHash, FWRepo, FWUrl = getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
-    print "FWUrl=", FWUrl
-    # then the version of the analyzer
-    AnaHash, AnaRepo, AnaUrl = getGitTagRepoUrl( os.path.dirname( psetName ) )
-    print "AnaUrl=", AnaUrl
+        print "##### Figure out the code(s) version"
+        # first the version of the framework
+        FWHash, FWRepo, FWUrl = utils.getGitTagRepoUrl( os.path.join(CMSSW_BASE, 'src/cp3_llbb/Framework') )
+        print "FWUrl=", FWUrl
+        # then the version of the analyzer
+        AnaHash, AnaRepo, AnaUrl = utils.getGitTagRepoUrl( os.path.dirname( psetName ) )
+        print "AnaUrl=", AnaUrl
 
-    print("")
+        print("")
 
-    print "##### Put it all together: write this sample into the database"
-    # all the info we have gathered is:
-    # workArea
-    # requestName
-    # psetName
-    # inputDataset
-    # dataset_id
-    # report['numEventsRead']) (not necessarily equal to dataset_nevents)
-    # log_files
-    # output_files
-    # report
-    # FWHash, FWRepo, FWUrl
-    # AnaHash, AnaRepo, AnaUrl
-    # dataset_nselected
-    # localpath
-    NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
-    add_sample(NAME, folder, "NTUPLES", dataset_nevents, dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
+        print "##### Put it all together: write this sample into the database"
+        # all the info we have gathered is:
+        # workArea
+        # requestName
+        # psetName
+        # inputDataset
+        # dataset_id
+        # report['numEventsRead']) (not necessarily equal to dataset_nevents)
+        # log_files
+        # output_files
+        # report
+        # FWHash, FWRepo, FWUrl
+        # AnaHash, AnaRepo, AnaUrl
+        # dataset_nselected
+        # localpath
+        NAME = requestName + '_' + FWHash + '_' + AnaRepo + '_' + AnaHash
+        add_sample(NAME, folder, "NTUPLES", dataset_nevents, dataset_nselected, AnaUrl, FWUrl, dataset_id, dataset_sumw, dataset_extras_sumw, has_job_processed_everything, dataset_nevents, db_files, processed_lumi)
 
 if __name__ == '__main__':
     main() 
